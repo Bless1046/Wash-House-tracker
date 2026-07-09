@@ -179,6 +179,7 @@
   .kpi{background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px;}
   .kpi .num{font-family:'Oswald',sans-serif; font-size:26px; font-weight:600; color:var(--navy);}
   .kpi .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-top:2px;}
+  .kpi .kpi-sub{font-size:11px; color:var(--purple-deep); font-weight:700; margin-top:4px;}
   .kpi.total{background:var(--purple-deep);}
   .kpi.total .num{color:#fff;}
   .kpi.total .lbl{color:rgba(255,255,255,.75);}
@@ -237,6 +238,10 @@
   .progress-bar-fill{height:100%; transition:width .3s;}
   .progress-pct{text-align:right; color:var(--purple-deep); font-weight:700;}
   .progress-last{color:var(--muted); font-size:11px;}
+  .risk-badge{background:var(--hard-red); color:#fff; font-size:9px; padding:2px 7px; border-radius:20px; text-transform:uppercase; letter-spacing:.04em; font-weight:700; margin-left:6px; vertical-align:middle;}
+  .completed-toggle{background:none; border:none; color:var(--purple-deep); font-size:12px; font-weight:600; cursor:pointer; padding:12px 0 0; text-decoration:underline;}
+  #completedList{display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line);}
+  #completedList.show{display:flex;}
 
   .empty-state{text-align:center; padding:50px 20px; color:var(--muted);}
   .empty-state .big{font-size:40px; margin-bottom:8px;}
@@ -258,7 +263,6 @@
   .modal-hint{font-size:12.5px; color:var(--muted); margin:0 0 14px;}
   .import-toolrow{display:flex; gap:12px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap;}
   .import-toolrow > div{max-width:130px;}
-  #importTextarea{width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; padding:10px; min-height:160px;}
   .import-summary{margin-top:14px; font-size:12.5px; padding:10px 14px; border-radius:8px; background:var(--chambray);}
   .import-summary.ok{background:var(--card-green);}
   .import-summary.warn{background:var(--card-pink);}
@@ -449,11 +453,11 @@
             <thead>
               <tr>
                 <th>CMT</th><th>Style #</th><th>Order #</th><th>Process</th><th>Wash</th><th>Days Wash</th>
-                <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Despatched</th><th>Status</th><th></th>
+                <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Recv %</th><th>Despatched</th><th>Desp %</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody id="jobsTableBody">
-              <tr class="empty-row"><td colspan="13">No job cards yet — add one on the left.</td></tr>
+              <tr class="empty-row"><td colspan="15">No job cards yet — add one on the left.</td></tr>
             </tbody>
           </table>
         </div>
@@ -475,9 +479,28 @@
     <div class="kpi-row">
       <div class="kpi total"><div class="num" id="kpiJobs">0</div><div class="lbl">Active Job Cards</div></div>
       <div class="kpi planned"><div class="num" id="kpiPlanned">0</div><div class="lbl">Planned Units</div></div>
-      <div class="kpi received"><div class="num" id="kpiReceived">0</div><div class="lbl">Units Received</div></div>
-      <div class="kpi despatched"><div class="num" id="kpiDespatched">0</div><div class="lbl">Units Despatched</div></div>
+      <div class="kpi received"><div class="num" id="kpiReceived">0</div><div class="lbl">Units Received</div><div class="kpi-sub" id="kpiReceivedPct"></div></div>
+      <div class="kpi despatched"><div class="num" id="kpiDespatched">0</div><div class="lbl">Units Despatched</div><div class="kpi-sub" id="kpiDespatchedPct"></div></div>
       <div class="kpi late"><div class="num" id="kpiLate">0</div><div class="lbl">Late vs. Delivery Date</div></div>
+    </div>
+
+    <div class="charts-row dash-section">
+      <div class="card" style="padding:20px 22px;">
+        <div class="section-title-bar">Outstanding Balance by Department</div>
+        <div class="bd-list" id="balChart"></div>
+      </div>
+      <div class="card" style="padding:20px 22px;">
+        <div class="section-title-bar">Jobs by Status</div>
+        <div class="bd-list" id="statusChart"></div>
+      </div>
+      <div class="card" style="padding:20px 22px;">
+        <div class="section-title-bar">Jobs by Wash Metric</div>
+        <div class="bd-list" id="metricChart"></div>
+      </div>
+      <div class="card" style="padding:20px 22px;">
+        <div class="section-title-bar">Jobs by Lead Time</div>
+        <div class="bd-list" id="leadTimeChart"></div>
+      </div>
     </div>
 
     <div class="dash-section card" style="padding:20px 22px;">
@@ -499,27 +522,10 @@
     </div>
 
     <div class="dash-section card" style="padding:20px 22px;">
-      <div class="section-title-bar">Delivery Progress — Received vs. Planned</div>
+      <div class="section-title-bar">Delivery Progress — Outstanding &amp; At Risk</div>
       <div class="progress-list" id="progressList"></div>
-    </div>
-
-    <div class="charts-row dash-section">
-      <div class="card" style="padding:20px 22px;">
-        <div class="section-title-bar">Outstanding Balance by Department</div>
-        <div class="bd-list" id="balChart"></div>
-      </div>
-      <div class="card" style="padding:20px 22px;">
-        <div class="section-title-bar">Jobs by Process</div>
-        <div class="bd-list" id="procList"></div>
-      </div>
-      <div class="card" style="padding:20px 22px;">
-        <div class="section-title-bar">Jobs by Wash Metric</div>
-        <div class="bd-list" id="metricChart"></div>
-      </div>
-      <div class="card" style="padding:20px 22px;">
-        <div class="section-title-bar">Jobs by Lead Time</div>
-        <div class="bd-list" id="leadTimeChart"></div>
-      </div>
+      <button type="button" class="completed-toggle" id="toggleCompletedBtn" style="display:none;"></button>
+      <div class="progress-list" id="completedList"></div>
     </div>
   </section>
 </main>
@@ -533,18 +539,19 @@
       <button type="button" id="closeImportBtn">✕</button>
     </div>
     <div class="modal-body">
-      <p class="modal-hint">Paste tab-separated rows copied straight from Excel or Google Sheets, with a header row matching your spreadsheet columns (CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments). Dates like "19 Jun" get the year below applied.</p>
+      <p class="modal-hint">Upload a CSV file with a header row matching your spreadsheet columns (CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments). Dates like "19 Jun" get the year below applied.</p>
       <div class="import-toolrow">
         <div>
           <label>Year for dates</label>
           <input type="number" id="importYear" value="2026">
         </div>
+        <div style="max-width:none; flex:1;">
+          <label>CSV File</label>
+          <input type="file" id="importFileInput" accept=".csv,text/csv">
+        </div>
         <button type="button" class="btn btn-ghost btn-sm" id="loadSampleBtn">Load Provided Data</button>
       </div>
-      <textarea id="importTextarea" placeholder="Paste tab-separated data here, including the header row..."></textarea>
-      <div class="form-actions">
-        <button type="button" class="btn btn-primary" id="parseImportBtn">Preview</button>
-      </div>
+      <div id="importFileName" style="font-size:11.5px; color:var(--muted);"></div>
       <div id="importPreview"></div>
     </div>
   </div>
@@ -582,6 +589,15 @@ const PROCESS_PALETTE = [
   {bg:'#ECE0F0', text:'#7a2e6b', bar:'#A4427A'},
   {bg:'#E4E4D0', text:'#5c5518', bar:'#7A941F'},
 ];
+
+const STATUS_STYLE = {
+  'Not Started': {bg:'#E8E8E8', text:'#555555', bar:'#9aa0a6'},
+  'In Progress': {bg:'#DDE4EC', text:'#2b4160', bar:'#3d5a80'},
+  'On Hold':     {bg:'#F5E6C8', text:'#7a5510', bar:'#B17F1A'},
+  'Complete':    {bg:'#E2EFDB', text:'#2f5613', bar:'#4a8c3f'},
+  'Despatched':  {bg:'#ECE0F0', text:'#6c2c84', bar:'#6c2c84'},
+  'Late':        {bg:'#FEDCE0', text:'#8a2233', bar:'#b3452c'},
+};
 
 const LEAD_BUCKETS = [
   {key:'1–7 days',   test:d=>d>=1 && d<=7,   bg:'#E2EFDB', text:'#2f5613', bar:'#4a8c3f'},
@@ -864,10 +880,14 @@ function renderJobsTable(){
   const list = filteredJobs();
   document.getElementById('jobCountChip').textContent = jobs.length;
   if(list.length === 0){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="12">No job cards match — add one, or clear filters.</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">No job cards match — add one, or clear filters.</td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(j=>`
+  tbody.innerHTML = list.map(j=>{
+    const planned = j.planned_units || 0;
+    const recvPct = planned > 0 ? Math.round((j.units_received||0)/planned*100) : null;
+    const despPct = planned > 0 ? Math.round((j.units_despatched||0)/planned*100) : null;
+    return `
     <tr style="border-left:4px solid ${METRIC_COLOR_VAR[j.wash_metric] || 'var(--line)'};">
       <td>${escAttr(j.cmt_name)}</td>
       <td class="mono">${escAttr(j.style_number)}</td>
@@ -879,14 +899,16 @@ function renderJobsTable(){
       <td>${j.style_delivery_date || '—'}</td>
       <td>${j.planned_units ?? 0}</td>
       <td>${j.units_received ?? 0}</td>
+      <td class="mono">${recvPct === null ? '—' : recvPct + '%'}</td>
       <td>${j.units_despatched ?? 0}</td>
+      <td class="mono">${despPct === null ? '—' : despPct + '%'}</td>
       <td>${escAttr(j.status || '—')}</td>
       <td>
         <button class="icon-btn" title="Edit" onclick="editJob('${j.id}')">✏️</button>
         <button class="icon-btn" title="Delete" onclick="deleteJob('${j.id}')">🗑️</button>
       </td>
     </tr>
-  `).join('');
+  `;}).join('');
 }
 
 document.getElementById('searchBox').addEventListener('input', renderJobsTable);
@@ -906,12 +928,14 @@ function renderDashboard(){
   document.getElementById('kpiReceived').textContent = received.toLocaleString();
   document.getElementById('kpiDespatched').textContent = despatched.toLocaleString();
   document.getElementById('kpiLate').textContent = late;
+  document.getElementById('kpiReceivedPct').textContent = planned > 0 ? `${Math.round(received/planned*100)}% of planned` : '';
+  document.getElementById('kpiDespatchedPct').textContent = planned > 0 ? `${Math.round(despatched/planned*100)}% of planned` : '';
 
   renderHero(total, late);
   renderGantt();
   renderProgressList();
   renderBalanceChart();
-  renderProcessList();
+  renderStatusChart();
   renderMetricChart();
   renderLeadTimeChart();
 }
@@ -1015,36 +1039,84 @@ function renderGantt(){
 
 function renderProgressList(){
   const el = document.getElementById('progressList');
+  const completedEl = document.getElementById('completedList');
+  const toggleBtn = document.getElementById('toggleCompletedBtn');
   if(jobs.length === 0){
     el.innerHTML = '<div class="empty-state">No data yet.</div>';
+    completedEl.innerHTML = '';
+    toggleBtn.style.display = 'none';
     return;
   }
-  el.innerHTML = jobs.map(j=>{
+  const todayISO = new Date().toISOString().slice(0,10);
+
+  function rowHtml(j){
     const planned = j.planned_units || 0;
     const received = j.units_received || 0;
     const pct = planned > 0 ? Math.min(100, Math.round(received/planned*100)) : 0;
     const color = METRIC_COLOR_VAR[j.wash_metric] || 'var(--denim)';
+    const atRisk = pct < 100 && j.style_delivery_date && j.style_delivery_date < todayISO;
     return `
       <div class="progress-row">
         <div class="progress-label"><b>${escAttr(j.style_number)}</b><span>${escAttr(j.cmt_name)}</span></div>
-        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%; background:${color};"></div></div>
+        <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${pct}%; background:${atRisk ? 'var(--hard-red)' : color};"></div></div>
         <div class="progress-pct mono">${received}/${planned} (${pct}%)</div>
-        <div class="progress-last">${j.last_drop_date ? 'Last drop: '+j.last_drop_date : 'No drops recorded'}</div>
+        <div class="progress-last">${j.last_drop_date ? 'Last drop: '+j.last_drop_date : 'No drops recorded'}${atRisk ? '<span class="risk-badge">At Risk</span>' : ''}</div>
       </div>`;
-  }).join('');
+  }
+
+  const outstanding = [];
+  const completed = [];
+  jobs.forEach(j=>{
+    const planned = j.planned_units || 0;
+    const received = j.units_received || 0;
+    const pct = planned > 0 ? Math.min(100, Math.round(received/planned*100)) : 0;
+    (pct >= 100 && planned > 0 ? completed : outstanding).push(j);
+  });
+
+  // At-risk (late) jobs float to the top of the outstanding list.
+  outstanding.sort((a,b)=>{
+    const aRisk = a.style_delivery_date && a.style_delivery_date < todayISO ? 0 : 1;
+    const bRisk = b.style_delivery_date && b.style_delivery_date < todayISO ? 0 : 1;
+    return aRisk - bRisk;
+  });
+
+  el.innerHTML = outstanding.length
+    ? outstanding.map(rowHtml).join('')
+    : '<div class="empty-state">Nothing outstanding — everything received is fully in.</div>';
+
+  if(completed.length){
+    toggleBtn.style.display = 'inline-block';
+    toggleBtn.textContent = `Show ${completed.length} completed job${completed.length===1?'':'s'} (100% received)`;
+    completedEl.innerHTML = completed.map(rowHtml).join('');
+  } else {
+    toggleBtn.style.display = 'none';
+    completedEl.innerHTML = '';
+    completedEl.classList.remove('show');
+  }
 }
 
+document.getElementById('toggleCompletedBtn').addEventListener('click', ()=>{
+  const completedEl = document.getElementById('completedList');
+  const btn = document.getElementById('toggleCompletedBtn');
+  const showing = completedEl.classList.toggle('show');
+  const count = completedEl.querySelectorAll('.progress-row').length;
+  btn.textContent = showing ? `Hide completed jobs` : `Show ${count} completed job${count===1?'':'s'} (100% received)`;
+});
+
 function bdItemsHtml(entries){
-  const max = Math.max(...entries.map(e=>e.count), 1);
-  return entries.map(e=>`
+  const max = Math.max(...entries.map(e=>e.count||0), 1);
+  return entries.map(e=>{
+    const width = e.widthPct != null ? e.widthPct : (e.count/max*100);
+    const displayVal = e.display != null ? e.display : e.count;
+    return `
     <div class="bd-item">
       <div class="bd-item-top">
         <span class="bd-tag" style="background:${e.bg}; color:${e.text};">${escAttr(e.label)}</span>
-        <span class="bd-count">${e.count}</span>
+        <span class="bd-count">${displayVal}</span>
       </div>
-      <div class="bd-thin-bar-bg"><div class="bd-thin-bar-fill" style="width:${(e.count/max*100).toFixed(1)}%; background:${e.bar};"></div></div>
-    </div>
-  `).join('');
+      <div class="bd-thin-bar-bg"><div class="bd-thin-bar-fill" style="width:${width.toFixed(1)}%; background:${e.bar};"></div></div>
+    </div>`;
+  }).join('');
 }
 
 function renderBalanceChart(){
@@ -1061,17 +1133,18 @@ function renderBalanceChart(){
   el.innerHTML = bdItemsHtml(entries);
 }
 
-function renderProcessList(){
-  const el = document.getElementById('procList');
+function renderStatusChart(){
+  const el = document.getElementById('statusChart');
   if(jobs.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
   const counts = {};
   jobs.forEach(j=>{
-    const p = j.process || 'Unspecified';
-    counts[p] = (counts[p]||0) + 1;
+    const s = (j.status || '').trim() || 'No Status';
+    counts[s] = (counts[s]||0) + 1;
   });
   const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
-  const entries = sorted.map(([label,count], i)=>{
-    const style = PROCESS_PALETTE[i % PROCESS_PALETTE.length];
+  let paletteIdx = 0;
+  const entries = sorted.map(([label,count])=>{
+    const style = STATUS_STYLE[label] || PROCESS_PALETTE[paletteIdx++ % PROCESS_PALETTE.length];
     return {label, count, bg:style.bg, text:style.text, bar:style.bar};
   });
   el.innerHTML = bdItemsHtml(entries);
@@ -1081,16 +1154,21 @@ function renderMetricChart(){
   const metrics = ['Easy','Medium','Hard','Very Hard'];
   const el = document.getElementById('metricChart');
   if(jobs.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+  const total = jobs.length;
   const styles = {
     'Easy':{bg:'var(--metric-easy)', text:'var(--metric-easy-text)'},
     'Medium':{bg:'var(--metric-medium)', text:'var(--metric-medium-text)'},
     'Hard':{bg:'var(--metric-hard)', text:'var(--metric-hard-text)'},
     'Very Hard':{bg:'var(--metric-veryhard)', text:'var(--metric-veryhard-text)'},
   };
-  const entries = metrics.map(m=>({
-    label:m, count: jobs.filter(j=>j.wash_metric===m).length,
-    bg:styles[m].bg, text:styles[m].text, bar:METRIC_COLOR_VAR[m]
-  }));
+  const entries = metrics.map(m=>{
+    const count = jobs.filter(j=>j.wash_metric===m).length;
+    const pct = total > 0 ? Math.round(count/total*100) : 0;
+    return {
+      label:m, count, display:`${pct}%`, widthPct:pct,
+      bg:styles[m].bg, text:styles[m].text, bar:METRIC_COLOR_VAR[m]
+    };
+  });
   el.innerHTML = bdItemsHtml(entries);
 }
 
@@ -1183,19 +1261,53 @@ function buildJobFromCells(headers, cells, year){
   };
 }
 
-function parseImportText(text, year){
-  const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
-  if(lines.length < 2) return {jobs:[], errors:['No data rows found — the first line must be a header row.']};
-  const headers = lines[0].split('\t').map(h=>h.trim().toUpperCase());
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i=0; i<text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+      else if(c === '\r'){ /* skip, \n handles the break */ }
+      else field += c;
+    }
+  }
+  if(field.length || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(cell => cell.trim() !== ''));
+}
+
+function runImportPreview(headers, dataRows, year){
   const jobsOut = [];
   const errors = [];
-  lines.slice(1).forEach((line, i)=>{
-    const cells = line.split('\t');
+  dataRows.forEach((cells, i)=>{
     const result = buildJobFromCells(headers, cells, year);
     if(result.error){ errors.push(`Row ${i+2}: ${result.error}`); }
     else { jobsOut.push(result.job); }
   });
-  return {jobs: jobsOut, errors};
+  pendingImportJobs = jobsOut;
+  const previewEl = document.getElementById('importPreview');
+  let html = `<div class="import-summary ${errors.length ? 'warn' : 'ok'}">${jobsOut.length} row${jobsOut.length===1?'':'s'} ready to import${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
+  if(errors.length){
+    html += `<div class="import-summary warn" style="margin-top:8px;">${errors.slice(0,5).map(escAttr).join('<br>')}${errors.length>5 ? `<br>+ ${errors.length-5} more` : ''}</div>`;
+  }
+  if(jobsOut.length){
+    html += `<table class="import-preview-table"><thead><tr><th>CMT</th><th>Style #</th><th>Order #</th><th>Wash</th><th>Planned</th><th>Received</th><th>Despatch</th></tr></thead><tbody>`;
+    html += jobsOut.slice(0,8).map(j=>`<tr><td>${escAttr(j.cmt_name)}</td><td>${escAttr(j.style_number)}</td><td>${escAttr(j.order_number)}</td><td>${escAttr(j.wash_metric)}</td><td>${j.planned_units}</td><td>${j.units_received}</td><td>${j.despatch_date||'—'}</td></tr>`).join('');
+    html += `</tbody></table>`;
+    if(jobsOut.length > 8) html += `<div style="font-size:11.5px; color:var(--muted); margin-top:6px;">+ ${jobsOut.length-8} more rows not shown</div>`;
+    html += `<div class="form-actions"><button type="button" class="btn btn-primary" id="commitImportBtn">Import ${jobsOut.length} Job Card${jobsOut.length===1?'':'s'}</button></div>`;
+  }
+  previewEl.innerHTML = html;
+  if(jobsOut.length){
+    document.getElementById('commitImportBtn').addEventListener('click', commitImport);
+  }
 }
 
 // Sample dataset — the data supplied for configuring this tool.
@@ -1219,7 +1331,6 @@ const SAMPLE_ROWS = [
 ["PRESTIGE","DN135219","DNLWPA143008","Denim lt ble only","EASY","3916","YES","29 Jun","","03 Jul","1050","","1050","2866","7","","","","","","","","7","20 Jul","24 Jul","","",""],
 ["PRESTIGE","DN135644","DNLWTP42726","Denim lt ble only","EASY","3914","YES","03 Jul","","03 Jul","50","","50","3864","3","","","","","","","","7","29 Jul","30 Jul","","",""],
 ];
-const SAMPLE_TSV = [SAMPLE_HEADERS.join('\t'), ...SAMPLE_ROWS.map(r=>r.join('\t'))].join('\n');
 
 let pendingImportJobs = [];
 
@@ -1227,35 +1338,36 @@ function openImportModal(){ document.getElementById('importModal').classList.add
 function closeImportModal(){
   document.getElementById('importModal').classList.remove('show');
   document.getElementById('importPreview').innerHTML = '';
+  document.getElementById('importFileName').textContent = '';
+  document.getElementById('importFileInput').value = '';
   pendingImportJobs = [];
 }
 document.getElementById('openImportBtn').addEventListener('click', openImportModal);
 document.getElementById('closeImportBtn').addEventListener('click', closeImportModal);
+
 document.getElementById('loadSampleBtn').addEventListener('click', ()=>{
-  document.getElementById('importTextarea').value = SAMPLE_TSV;
+  document.getElementById('importFileName').textContent = 'Using provided dataset (17 rows) — not a file.';
+  const year = Number(document.getElementById('importYear').value) || new Date().getFullYear();
+  runImportPreview(SAMPLE_HEADERS, SAMPLE_ROWS, year);
 });
 
-document.getElementById('parseImportBtn').addEventListener('click', ()=>{
-  const text = document.getElementById('importTextarea').value;
-  const year = Number(document.getElementById('importYear').value) || new Date().getFullYear();
-  const {jobs: parsed, errors} = parseImportText(text, year);
-  pendingImportJobs = parsed;
-  const previewEl = document.getElementById('importPreview');
-  let html = `<div class="import-summary ${errors.length ? 'warn' : 'ok'}">${parsed.length} row${parsed.length===1?'':'s'} ready to import${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
-  if(errors.length){
-    html += `<div class="import-summary warn" style="margin-top:8px;">${errors.slice(0,5).map(escAttr).join('<br>')}${errors.length>5 ? `<br>+ ${errors.length-5} more` : ''}</div>`;
-  }
-  if(parsed.length){
-    html += `<table class="import-preview-table"><thead><tr><th>CMT</th><th>Style #</th><th>Order #</th><th>Wash</th><th>Planned</th><th>Received</th><th>Despatch</th></tr></thead><tbody>`;
-    html += parsed.slice(0,8).map(j=>`<tr><td>${escAttr(j.cmt_name)}</td><td>${escAttr(j.style_number)}</td><td>${escAttr(j.order_number)}</td><td>${escAttr(j.wash_metric)}</td><td>${j.planned_units}</td><td>${j.units_received}</td><td>${j.despatch_date||'—'}</td></tr>`).join('');
-    html += `</tbody></table>`;
-    if(parsed.length > 8) html += `<div style="font-size:11.5px; color:var(--muted); margin-top:6px;">+ ${parsed.length-8} more rows not shown</div>`;
-    html += `<div class="form-actions"><button type="button" class="btn btn-primary" id="commitImportBtn">Import ${parsed.length} Job Card${parsed.length===1?'':'s'}</button></div>`;
-  }
-  previewEl.innerHTML = html;
-  if(parsed.length){
-    document.getElementById('commitImportBtn').addEventListener('click', commitImport);
-  }
+document.getElementById('importFileInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  document.getElementById('importFileName').textContent = `Selected: ${file.name}`;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    const rows = parseCSV(String(ev.target.result));
+    if(rows.length < 2){
+      document.getElementById('importPreview').innerHTML = '<div class="import-summary warn">No data rows found — the CSV needs a header row plus at least one data row.</div>';
+      return;
+    }
+    const headers = rows[0].map(h=>h.trim().toUpperCase());
+    const year = Number(document.getElementById('importYear').value) || new Date().getFullYear();
+    runImportPreview(headers, rows.slice(1), year);
+  };
+  reader.onerror = ()=> toast('Could not read that file.', true);
+  reader.readAsText(file);
 });
 
 async function commitImport(){
