@@ -110,11 +110,12 @@
   .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px;}
   .field-grid .full{grid-column:1/-1;}
   label{display:block; font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px;}
-  input[type=text], input[type=date], input[type=number], select{
+  input[type=text], input[type=date], input[type=number], select, textarea{
     width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px;
     font-size:13.5px; font-family:'Inter',sans-serif; background:var(--chambray); transition:.15s;
   }
-  input:focus, select:focus{outline:none; border-color:var(--denim); background:#fff; box-shadow:0 0 0 3px rgba(61,90,128,.12);}
+  textarea{resize:vertical; font-family:'Inter',sans-serif;}
+  input:focus, select:focus, textarea:focus{outline:none; border-color:var(--denim); background:#fff; box-shadow:0 0 0 3px rgba(61,90,128,.12);}
   .radio-row{display:flex; gap:14px; padding:9px 2px;}
   .radio-row label{display:flex; align-items:center; gap:6px; font-size:12.5px; text-transform:none; letter-spacing:0; font-weight:500; color:var(--ink); margin:0;}
   .radio-row input{width:auto;}
@@ -246,6 +247,24 @@
 
   #configWarning{background:#fff2d6; border:1px solid #e0b050; color:#7a5510; padding:12px 16px; border-radius:8px; margin-bottom:18px; font-size:13px; display:none;}
   #configWarning code{background:rgba(0,0,0,.06); padding:1px 5px; border-radius:4px;}
+
+  /* Import modal */
+  .modal-overlay{position:fixed; inset:0; background:rgba(20,20,30,.55); display:none; align-items:center; justify-content:center; z-index:200; padding:20px;}
+  .modal-overlay.show{display:flex;}
+  .modal-box{background:#fff; border-radius:var(--radius); width:100%; max-width:840px; max-height:88vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.35);}
+  .modal-header{background:var(--purple-deep); color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:13px; letter-spacing:.05em; position:sticky; top:0;}
+  .modal-header button{background:none; border:none; color:#fff; font-size:16px; cursor:pointer; line-height:1;}
+  .modal-body{padding:20px;}
+  .modal-hint{font-size:12.5px; color:var(--muted); margin:0 0 14px;}
+  .import-toolrow{display:flex; gap:12px; align-items:flex-end; margin-bottom:12px; flex-wrap:wrap;}
+  .import-toolrow > div{max-width:130px;}
+  #importTextarea{width:100%; font-family:'JetBrains Mono',monospace; font-size:11px; padding:10px; min-height:160px;}
+  .import-summary{margin-top:14px; font-size:12.5px; padding:10px 14px; border-radius:8px; background:var(--chambray);}
+  .import-summary.ok{background:var(--card-green);}
+  .import-summary.warn{background:var(--card-pink);}
+  .import-preview-table{width:100%; border-collapse:collapse; font-size:11.5px; margin-top:10px;}
+  .import-preview-table th{background:var(--denim); color:#fff; padding:6px 8px; text-align:left; font-weight:600;}
+  .import-preview-table td{padding:6px 8px; border-bottom:1px solid var(--line);}
 </style>
 </head>
 <body>
@@ -346,12 +365,25 @@
               <input type="date" id="despatch_date">
             </div>
 
-            <div class="full">
+            <div>
               <label>Sample Received</label>
               <div class="radio-row">
                 <label><input type="radio" name="sample_received" value="yes"> Yes</label>
                 <label><input type="radio" name="sample_received" value="no" checked> No</label>
               </div>
+            </div>
+            <div>
+              <label>Status</label>
+              <input type="text" id="status" list="statusList" placeholder="e.g. In Progress">
+              <datalist id="statusList">
+                <option value="Not Started"><option value="In Progress"><option value="On Hold">
+                <option value="Complete"><option value="Despatched"><option value="Late">
+              </datalist>
+            </div>
+
+            <div class="full">
+              <label>Comments</label>
+              <textarea id="comments" rows="2" placeholder="Notes about this job..."></textarea>
             </div>
 
             <div class="full">
@@ -399,7 +431,10 @@
       </div>
 
       <div class="card" style="padding:20px 22px;">
-        <div class="section-title-bar">Job Cards <span class="chip" id="jobCountChip">0</span></div>
+        <div class="section-title-bar">
+          <span>Job Cards <span class="chip" id="jobCountChip">0</span></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="openImportBtn" style="background:rgba(255,255,255,.15); color:#fff; border-color:rgba(255,255,255,.3);">⬆ Import Data</button>
+        </div>
         <div class="table-toolbar">
           <input type="text" id="searchBox" placeholder="Search CMT, style, order...">
           <select id="filterProcess"><option value="">All Processes</option></select>
@@ -414,11 +449,11 @@
             <thead>
               <tr>
                 <th>CMT</th><th>Style #</th><th>Order #</th><th>Process</th><th>Wash</th><th>Days Wash</th>
-                <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Despatched</th><th></th>
+                <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Despatched</th><th>Status</th><th></th>
               </tr>
             </thead>
             <tbody id="jobsTableBody">
-              <tr class="empty-row"><td colspan="12">No job cards yet — add one on the left.</td></tr>
+              <tr class="empty-row"><td colspan="13">No job cards yet — add one on the left.</td></tr>
             </tbody>
           </table>
         </div>
@@ -490,6 +525,30 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="importModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>Import Job Cards</span>
+      <button type="button" id="closeImportBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">Paste tab-separated rows copied straight from Excel or Google Sheets, with a header row matching your spreadsheet columns (CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments). Dates like "19 Jun" get the year below applied.</p>
+      <div class="import-toolrow">
+        <div>
+          <label>Year for dates</label>
+          <input type="number" id="importYear" value="2026">
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="loadSampleBtn">Load Provided Data</button>
+      </div>
+      <textarea id="importTextarea" placeholder="Paste tab-separated data here, including the header row..."></textarea>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="parseImportBtn">Preview</button>
+      </div>
+      <div id="importPreview"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ======================================================================
@@ -634,6 +693,8 @@ function readForm(){
     days_in_washing: Number(document.getElementById('days_in_washing').value) || 0,
     planned_units: Number(document.getElementById('planned_units').value) || 0,
     sample_received: document.querySelector('input[name=sample_received]:checked').value === 'yes',
+    status: document.getElementById('status').value.trim(),
+    comments: document.getElementById('comments').value.trim(),
     units_received: units_received,
     units_despatched: Number(document.getElementById('units_despatched').value) || 0,
     complete_date: document.getElementById('complete_date').value || null,
@@ -661,6 +722,8 @@ function fillForm(job){
   document.getElementById('days_in_washing').value = job.days_in_washing || 0;
   document.getElementById('planned_units').value = job.planned_units || 0;
   document.querySelector(`input[name=sample_received][value=${job.sample_received ? 'yes' : 'no'}]`).checked = true;
+  document.getElementById('status').value = job.status || '';
+  document.getElementById('comments').value = job.comments || '';
   document.getElementById('units_despatched').value = job.units_despatched || 0;
   document.getElementById('complete_date').value = job.complete_date || '';
   document.getElementById('despatch_date').value = job.despatch_date || '';
@@ -817,6 +880,7 @@ function renderJobsTable(){
       <td>${j.planned_units ?? 0}</td>
       <td>${j.units_received ?? 0}</td>
       <td>${j.units_despatched ?? 0}</td>
+      <td>${escAttr(j.status || '—')}</td>
       <td>
         <button class="icon-btn" title="Edit" onclick="editJob('${j.id}')">✏️</button>
         <button class="icon-btn" title="Delete" onclick="deleteJob('${j.id}')">🗑️</button>
@@ -1038,6 +1102,184 @@ function renderLeadTimeChart(){
     bg:b.bg, text:b.text, bar:b.bar
   }));
   el.innerHTML = bdItemsHtml(entries);
+}
+
+/* ---------------- Import ---------------- */
+const MONTHS_MAP = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+
+function parseShortDate(str, year){
+  if(!str) return null;
+  const s = String(str).trim();
+  if(!s) return null;
+  const m = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})/);
+  if(!m) return null;
+  const day = m[1].padStart(2,'0');
+  const mon = MONTHS_MAP[m[2].slice(0,3).toLowerCase()];
+  if(!mon) return null;
+  return `${year}-${mon}-${day}`;
+}
+function parseIntSafe(v){
+  const n = parseInt(String(v).replace(/[^0-9\-]/g,''), 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function buildJobFromCells(headers, cells, year){
+  const get = (name)=>{
+    const idx = headers.indexOf(name);
+    return idx > -1 ? (cells[idx] || '').trim() : '';
+  };
+  const cmt_name = get('CMT');
+  const style_number = get('STYLE NO');
+  const order_number = get('ORDERNO');
+  if(!cmt_name || !style_number || !order_number){
+    return {error: 'Missing CMT / Style No / Order No'};
+  }
+
+  const washRaw = get('WASH METRIC').toUpperCase();
+  const washMap = {EASY:'Easy', MEDIUM:'Medium', HARD:'Hard', 'VERY HARD':'Very Hard'};
+  const wash_metric = washMap[washRaw] || 'Medium';
+
+  const drop1 = parseShortDate(get('1ST DROP DATE'), year);
+  const drop2 = parseShortDate(get('2ND DROP DATE'), year);
+  const last_drop_date = parseShortDate(get('LAST DATE'), year);
+  const units_received = parseIntSafe(get('UNITS RECEIVED'));
+
+  const drops = [];
+  if(drop1 && drop2){
+    drops.push({drop_no:'1st', date:drop1, units:0});
+    drops.push({drop_no:'2nd', date:drop2, units:units_received});
+  } else if(drop1){
+    drops.push({drop_no:'1st', date:drop1, units:units_received});
+  } else if(last_drop_date){
+    drops.push({drop_no:'1st', date:last_drop_date, units:units_received});
+  }
+
+  return {
+    job: {
+      cmt_name, style_number, order_number,
+      process: get('PROCESS'),
+      wash_metric,
+      start_date: null,
+      style_delivery_date: parseShortDate(get('DELIVERY DATE'), year),
+      days_in_washing: parseIntSafe(get('DAYS IN WASHING')),
+      planned_units: parseIntSafe(get('PLANNED UNITS')),
+      sample_received: get('SAMPLE RECEIVED').toUpperCase() === 'YES',
+      status: get('STATUS'),
+      comments: get('COMMENTS'),
+      units_received,
+      units_despatched: parseIntSafe(get('UNITS DESPATCHED')),
+      complete_date: parseShortDate(get('COMPLETE DATE'), year),
+      despatch_date: parseShortDate(get('DESPATCH DATE'), year),
+      drops,
+      lead_time_days: parseIntSafe(get('LEAD TIME (DAYS)')),
+      last_drop_date,
+      balance_laundry: parseIntSafe(get('BALANCE IN LAUNDRY')),
+      balance_production: parseIntSafe(get('PRODUCTION BALANCE')),
+      balance_spraying: parseIntSafe(get('SPRAY BALANCE')),
+      balance_manual: parseIntSafe(get('MANUAL')),
+      balance_laser: parseIntSafe(get('LAZER BALANCE')),
+      balance_finishing: parseIntSafe(get('FINISHING BALANCE')),
+    }
+  };
+}
+
+function parseImportText(text, year){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length < 2) return {jobs:[], errors:['No data rows found — the first line must be a header row.']};
+  const headers = lines[0].split('\t').map(h=>h.trim().toUpperCase());
+  const jobsOut = [];
+  const errors = [];
+  lines.slice(1).forEach((line, i)=>{
+    const cells = line.split('\t');
+    const result = buildJobFromCells(headers, cells, year);
+    if(result.error){ errors.push(`Row ${i+2}: ${result.error}`); }
+    else { jobsOut.push(result.job); }
+  });
+  return {jobs: jobsOut, errors};
+}
+
+// Sample dataset — the data supplied for configuring this tool.
+const SAMPLE_HEADERS = ["CMT","STYLE NO","ORDERNO","PROCESS","WASH METRIC","PLANNED UNITS","SAMPLE RECEIVED","1ST DROP DATE","2ND DROP DATE","LAST DATE","UNITS RECEIVED","UNITS DESPATCHED","BALANCE IN LAUNDRY","PRODUCTION BALANCE","DAYS IN WASHING","SPRAYING AUTO","MANUAL","SPRAY BALANCE","LAZER","LAZER BALANCE","FINISHING","FINISHING BALANCE","LEAD TIME (DAYS)","COMPLETE DATE","DESPATCH DATE","DELIVERY DATE","STATUS","COMMENTS"];
+const SAMPLE_ROWS = [
+["JKT FACTORY","DN134635","DNLWDR144010","DENIM MED BLEACH ONLY","EASY","4137","YES","19 Jun","","03 Jul","2642","1857","785","1495","13","","","","","","","","4","09 Jul","","","",""],
+["KINGSPARK","DN134609","DNMPA143958","DENIM LT BLE/W/SB/T","EASY","1545","YES","08 Jun","","09 Jun","1545","","1545","","22","","","","","","","","7","07 Jun","09 Jul","","",""],
+["KINGSPARK","DN134937","DNLWPA140798-2","Denim cru/med bl/w/sb/t","MEDIUM","1545","YES","17 Jun","","19 Jun","1545","","1545","","15","","","","","","","","7","06 Jul","09 Jul","","",""],
+["KINGSPARK","DN135038","DNMPA142887-1","Denim per ble/sb/trim threads","HARD","2060","YES","17 Jun","","19 Jun","2118","798","1320","","15","","","","","","","","7","08 Jul","09 Jul","","",""],
+["KINGSPARK","DN135037","DNMPA142888-2","Denim med ble/sb/trim threads","HARD","2060","YES","19 Jun","","23 Jun","2109","1805","304","","13","","","","","","","","8","09 Jul","10 Jul","","",""],
+["KINGSPARK","DN134637","DNLWPA143206-1","Denim lw/med bl/sb","MEDIUM","3090","YES","19 Jun","","19 Jun","3066","","3066","","13","","","","","","","","7","06 Jul","14 Jul","","",""],
+["KINGSPARK","DN134653","DNLWPA144177","Denim lw/med ble/sb","MEDIUM","4000","YES","25 Jun","","29 Jun","3700","","3700","300","9","","","","","","","","7","07 Jul","14 Jul","","",""],
+["KINGSPARK","DN135125","DNWPA143749","Denim lw/per ble/sb","HARD","1854","YES","24 Jun","","25 Jun","1855","","1855","","10","","","","","","","","7","07 Jul","16 Jul","","",""],
+["KINGSPARK","DN135563","DNLWPA139327-2","Denim lw/per ble","MEDIUM","4120","YES","23 Jun","","25 Jun","4105","","4105","","11","","","","","","","","7","09 Jul","16 Jul","","",""],
+["KINGSPARK","DN135493","DNLWPA144119","Denim lw/dark wash/sb/t","VERY HARD","4120","YES","29 Jun","","06 Jul","2240","","2240","1880","7","","","","","","","","9","16 Jul","21 Jul","","",""],
+["KINGSPARK","DN134857","DNLWPA144279","Denim lw/t/med ble/sb","MEDIUM","4000","YES","01 Jul","","02 Jul","4068","","3200","","5","","","","","","","","7","30 Jul","31 Jul","","",""],
+["KINGSPARK","DN135494","DNLWPA145332","Denim lw/dark wash/sb/t","VERY HARD","2060","YES","06 Jul","","06 Jul","250","","250","1810","2","","","","","","","","7","","","","",""],
+["PRESTIGE","DN134507","DNLWDR143782","Denim Med ble/aos/tint","MEDIUM","1030","YES","19 Jun","","26 Jun","1025","","1025","","13","","","","","","","","7","11 Jul","17 Jul","","",""],
+["PRESTIGE","DN135705","DNLWPA143812","Denim med ble only","MEDIUM","2266","YES","22 Jun","","26 Jun","2100","624","1476","166","12","","","","","","","","4","11 Jul","13 Jul","","",""],
+["PRESTIGE","DN135670","DNLWPA142719","Denim med ble only","MEDIUM","2269","YES","23 Jun","","26 Jun","1070","","1070","1199","13","","","","","","","","4","07 Jul","23 Jul","","",""],
+["PRESTIGE","DN135219","DNLWPA143008","Denim lt ble only","EASY","3916","YES","29 Jun","","03 Jul","1050","","1050","2866","7","","","","","","","","7","20 Jul","24 Jul","","",""],
+["PRESTIGE","DN135644","DNLWTP42726","Denim lt ble only","EASY","3914","YES","03 Jul","","03 Jul","50","","50","3864","3","","","","","","","","7","29 Jul","30 Jul","","",""],
+];
+const SAMPLE_TSV = [SAMPLE_HEADERS.join('\t'), ...SAMPLE_ROWS.map(r=>r.join('\t'))].join('\n');
+
+let pendingImportJobs = [];
+
+function openImportModal(){ document.getElementById('importModal').classList.add('show'); }
+function closeImportModal(){
+  document.getElementById('importModal').classList.remove('show');
+  document.getElementById('importPreview').innerHTML = '';
+  pendingImportJobs = [];
+}
+document.getElementById('openImportBtn').addEventListener('click', openImportModal);
+document.getElementById('closeImportBtn').addEventListener('click', closeImportModal);
+document.getElementById('loadSampleBtn').addEventListener('click', ()=>{
+  document.getElementById('importTextarea').value = SAMPLE_TSV;
+});
+
+document.getElementById('parseImportBtn').addEventListener('click', ()=>{
+  const text = document.getElementById('importTextarea').value;
+  const year = Number(document.getElementById('importYear').value) || new Date().getFullYear();
+  const {jobs: parsed, errors} = parseImportText(text, year);
+  pendingImportJobs = parsed;
+  const previewEl = document.getElementById('importPreview');
+  let html = `<div class="import-summary ${errors.length ? 'warn' : 'ok'}">${parsed.length} row${parsed.length===1?'':'s'} ready to import${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
+  if(errors.length){
+    html += `<div class="import-summary warn" style="margin-top:8px;">${errors.slice(0,5).map(escAttr).join('<br>')}${errors.length>5 ? `<br>+ ${errors.length-5} more` : ''}</div>`;
+  }
+  if(parsed.length){
+    html += `<table class="import-preview-table"><thead><tr><th>CMT</th><th>Style #</th><th>Order #</th><th>Wash</th><th>Planned</th><th>Received</th><th>Despatch</th></tr></thead><tbody>`;
+    html += parsed.slice(0,8).map(j=>`<tr><td>${escAttr(j.cmt_name)}</td><td>${escAttr(j.style_number)}</td><td>${escAttr(j.order_number)}</td><td>${escAttr(j.wash_metric)}</td><td>${j.planned_units}</td><td>${j.units_received}</td><td>${j.despatch_date||'—'}</td></tr>`).join('');
+    html += `</tbody></table>`;
+    if(parsed.length > 8) html += `<div style="font-size:11.5px; color:var(--muted); margin-top:6px;">+ ${parsed.length-8} more rows not shown</div>`;
+    html += `<div class="form-actions"><button type="button" class="btn btn-primary" id="commitImportBtn">Import ${parsed.length} Job Card${parsed.length===1?'':'s'}</button></div>`;
+  }
+  previewEl.innerHTML = html;
+  if(parsed.length){
+    document.getElementById('commitImportBtn').addEventListener('click', commitImport);
+  }
+});
+
+async function commitImport(){
+  if(pendingImportJobs.length === 0) return;
+  const btn = document.getElementById('commitImportBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Importing…'; }
+  try{
+    if(supa){
+      const {data: inserted, error} = await supa.from('wash_jobs').insert(pendingImportJobs).select();
+      if(error) throw error;
+      jobs = [...inserted, ...jobs];
+    } else {
+      const withIds = pendingImportJobs.map(j=>({...j, id:'local-'+Math.random().toString(36).slice(2), created_at:new Date().toISOString()}));
+      jobs = [...withIds, ...jobs];
+    }
+    toast(`Imported ${pendingImportJobs.length} job card${pendingImportJobs.length===1?'':'s'}.`);
+    renderJobsTable();
+    populateProcessFilter();
+    closeImportModal();
+  }catch(err){
+    console.error(err);
+    toast('Import failed: ' + (err.message || err), true);
+    if(btn){ btn.disabled = false; btn.textContent = `Import ${pendingImportJobs.length} Job Cards`; }
+  }
 }
 
 /* ---------------- Init ---------------- */
