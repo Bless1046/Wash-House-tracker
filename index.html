@@ -104,8 +104,16 @@
   .section-title-bar .chip{background:rgba(255,255,255,.2); color:#fff; font-size:10.5px; padding:2px 9px; border-radius:20px; font-family:'JetBrains Mono',monospace; letter-spacing:0;}
 
   /* ---------- Job Card layout ---------- */
-  .jobcard-grid{display:grid; grid-template-columns:minmax(360px,460px) 1fr; gap:22px; align-items:start;}
-  @media (max-width:1050px){.jobcard-grid{grid-template-columns:1fr;}}
+  /* Job card drawer (slides in from the left) */
+  .drawer-overlay{position:fixed; inset:0; background:rgba(20,20,30,.45); z-index:150; opacity:0; pointer-events:none; transition:opacity .2s ease;}
+  .drawer-overlay.open{opacity:1; pointer-events:auto;}
+  .drawer-panel{position:fixed; top:0; left:0; height:100vh; width:100%; max-width:520px; background:#fff; box-shadow:10px 0 40px rgba(0,0,0,.3); transform:translateX(-100%); transition:transform .25s ease; overflow-y:auto; z-index:151; display:flex; flex-direction:column;}
+  .drawer-overlay.open .drawer-panel{transform:translateX(0);}
+  .drawer-header{background:var(--purple-deep); color:#fff; padding:16px 20px; display:flex; align-items:center; justify-content:space-between; font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:14px; letter-spacing:.05em; position:sticky; top:0; z-index:2;}
+  .drawer-header .chip{background:rgba(255,255,255,.2); color:#fff;}
+  .drawer-header button{background:rgba(255,255,255,.15); border:none; color:#fff; width:28px; height:28px; border-radius:50%; cursor:pointer; font-size:13px;}
+  .drawer-header button:hover{background:rgba(255,255,255,.3);}
+  .drawer-body{padding:22px 24px;}
 
   .field-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px;}
   .field-grid .full{grid-column:1/-1;}
@@ -298,169 +306,35 @@
 
   <!-- ============ TAB 1: JOB CARD ============ -->
   <section class="tab active" id="tab-jobcard">
-    <div class="jobcard-grid">
-
-      <div class="tag-card">
-        <div class="section-title"><span id="formTitle">New Job Card</span> <span class="chip" id="formModeChip">CREATE</span></div>
-        <form id="jobForm">
-          <div class="field-grid">
-            <div class="full">
-              <label>CMT Name</label>
-              <input type="text" id="cmt_name" required placeholder="e.g. Denim Craft CMT">
-            </div>
-            <div>
-              <label>Style Number</label>
-              <input type="text" id="style_number" required placeholder="e.g. ST-4421">
-            </div>
-            <div>
-              <label>Order Number</label>
-              <input type="text" id="order_number" required placeholder="e.g. ORD-8801">
-            </div>
-
-            <div>
-              <label>Start Date</label>
-              <input type="date" id="start_date">
-            </div>
-            <div>
-              <label>Style Delivery Date</label>
-              <input type="date" id="style_delivery_date">
-            </div>
-
-            <div class="full">
-              <label>Process</label>
-              <input type="text" id="process" list="processList" placeholder="e.g. Stone Wash, Enzyme, PP Spray...">
-              <datalist id="processList">
-                <option value="Stone Wash"><option value="Enzyme Wash"><option value="Bleach Wash">
-                <option value="PP Spray"><option value="Whiskering"><option value="Tack">
-                <option value="Rinse"><option value="Hand Scraping"><option value="Ozone">
-                <option value="Garment Dye"><option value="Laser">
-              </datalist>
-            </div>
-
-            <div>
-              <label>Wash Metric (Difficulty)</label>
-              <select id="wash_metric">
-                <option value="Easy">Easy</option>
-                <option value="Medium" selected>Medium</option>
-                <option value="Hard">Hard</option>
-                <option value="Very Hard">Very Hard</option>
-              </select>
-            </div>
-            <div>
-              <label>Days in Washing</label>
-              <input type="number" id="days_in_washing" min="0" value="0">
-            </div>
-
-            <div>
-              <label>Planned Units</label>
-              <input type="number" id="planned_units" min="0" value="0">
-            </div>
-            <div>
-              <label>Units Despatched</label>
-              <input type="number" id="units_despatched" min="0" value="0">
-            </div>
-
-            <div>
-              <label>Complete Date</label>
-              <input type="date" id="complete_date">
-            </div>
-            <div>
-              <label>Despatch Date</label>
-              <input type="date" id="despatch_date">
-            </div>
-
-            <div>
-              <label>Sample Received</label>
-              <div class="radio-row">
-                <label><input type="radio" name="sample_received" value="yes"> Yes</label>
-                <label><input type="radio" name="sample_received" value="no" checked> No</label>
-              </div>
-            </div>
-            <div>
-              <label>Status</label>
-              <input type="text" id="status" list="statusList" placeholder="e.g. In Progress">
-              <datalist id="statusList">
-                <option value="Not Started"><option value="In Progress"><option value="On Hold">
-                <option value="Complete"><option value="Despatched"><option value="Late">
-              </datalist>
-            </div>
-
-            <div class="full">
-              <label>Comments</label>
-              <textarea id="comments" rows="2" placeholder="Notes about this job..."></textarea>
-            </div>
-
-            <div class="full">
-              <fieldset>
-                <legend>Delivery Planning</legend>
-                <div class="drops-table">
-                  <div class="drops-head"><span>Drop</span><span>Date</span><span>Units Delivered</span><span></span></div>
-                  <div id="dropsContainer"></div>
-                </div>
-                <button type="button" class="btn btn-ghost btn-sm" id="addDropBtn">+ Add Drop</button>
-                <div class="drop-total" id="dropTotal">Total received: 0 / 0 planned (0%)</div>
-                <div class="lead-last-row">
-                  <div>
-                    <label>Lead Time (days)</label>
-                    <input type="number" id="lead_time_days" min="0" value="0">
-                  </div>
-                  <div>
-                    <label>Last Drop Date</label>
-                    <input type="date" id="last_drop_date">
-                  </div>
-                </div>
-              </fieldset>
-            </div>
-
-            <div class="full">
-              <fieldset>
-                <legend>Balances (units outstanding)</legend>
-                <div class="balance-grid">
-                  <div><label>Laundry</label><input type="number" id="balance_laundry" min="0" value="0"></div>
-                  <div><label>Production</label><input type="number" id="balance_production" min="0" value="0"></div>
-                  <div><label>Spraying</label><input type="number" id="balance_spraying" min="0" value="0"></div>
-                  <div><label>Manual</label><input type="number" id="balance_manual" min="0" value="0"></div>
-                  <div><label>Laser</label><input type="number" id="balance_laser" min="0" value="0"></div>
-                  <div><label>Finishing</label><input type="number" id="balance_finishing" min="0" value="0"></div>
-                </div>
-              </fieldset>
-            </div>
-          </div>
-
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary" id="submitBtn">Save Job Card</button>
-            <button type="button" class="btn btn-ghost" id="cancelEditBtn" style="display:none;">Cancel Edit</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card" style="padding:20px 22px;">
-        <div class="section-title-bar">
-          <span>Job Cards <span class="chip" id="jobCountChip">0</span></span>
+    <div class="card" style="padding:20px 22px;">
+      <div class="section-title-bar">
+        <span>Job Cards <span class="chip" id="jobCountChip">0</span></span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-ghost btn-sm" id="openNewJobBtn" style="background:rgba(255,255,255,.15); color:#fff; border-color:rgba(255,255,255,.3);">+ New Job Card</button>
           <button type="button" class="btn btn-ghost btn-sm" id="openImportBtn" style="background:rgba(255,255,255,.15); color:#fff; border-color:rgba(255,255,255,.3);">⬆ Import Data</button>
         </div>
-        <div class="table-toolbar">
-          <input type="text" id="searchBox" placeholder="Search CMT, style, order...">
-          <select id="filterProcess"><option value="">All Processes</option></select>
-          <select id="filterMetric">
-            <option value="">All Wash Metrics</option>
-            <option value="Easy">Easy</option><option value="Medium">Medium</option>
-            <option value="Hard">Hard</option><option value="Very Hard">Very Hard</option>
-          </select>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>CMT</th><th>Style #</th><th>Order #</th><th>Process</th><th>Wash</th><th>Days Wash</th>
-                <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Recv %</th><th>Despatched</th><th>Desp %</th><th>Status</th><th></th>
-              </tr>
-            </thead>
-            <tbody id="jobsTableBody">
-              <tr class="empty-row"><td colspan="15">No job cards yet — add one on the left.</td></tr>
-            </tbody>
-          </table>
-        </div>
+      </div>
+      <div class="table-toolbar">
+        <input type="text" id="searchBox" placeholder="Search CMT, style, order...">
+        <select id="filterProcess"><option value="">All Processes</option></select>
+        <select id="filterMetric">
+          <option value="">All Wash Metrics</option>
+          <option value="Easy">Easy</option><option value="Medium">Medium</option>
+          <option value="Hard">Hard</option><option value="Very Hard">Very Hard</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>CMT</th><th>Style #</th><th>Order #</th><th>Process</th><th>Wash</th><th>Days Wash</th>
+              <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Recv %</th><th>Despatched</th><th>Desp %</th><th>Status</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="jobsTableBody">
+            <tr class="empty-row"><td colspan="15">No job cards yet — click "+ New Job Card" to add one.</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </section>
@@ -530,6 +404,150 @@
   </section>
 </main>
 
+<div class="drawer-overlay" id="jobDrawerOverlay">
+  <div class="drawer-panel">
+    <div class="drawer-header">
+      <span id="formTitle">New Job Card</span>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="chip" id="formModeChip">CREATE</span>
+        <button type="button" id="closeJobDrawerBtn">✕</button>
+      </div>
+    </div>
+    <div class="drawer-body">
+      <form id="jobForm">
+        <div class="field-grid">
+          <div class="full">
+            <label>CMT Name</label>
+            <input type="text" id="cmt_name" required placeholder="e.g. Denim Craft CMT">
+          </div>
+          <div>
+            <label>Style Number</label>
+            <input type="text" id="style_number" required placeholder="e.g. ST-4421">
+          </div>
+          <div>
+            <label>Order Number</label>
+            <input type="text" id="order_number" required placeholder="e.g. ORD-8801">
+          </div>
+
+          <div>
+            <label>Start Date</label>
+            <input type="date" id="start_date">
+          </div>
+          <div>
+            <label>Style Delivery Date</label>
+            <input type="date" id="style_delivery_date">
+          </div>
+
+          <div class="full">
+            <label>Process</label>
+            <input type="text" id="process" list="processList" placeholder="e.g. Stone Wash, Enzyme, PP Spray...">
+            <datalist id="processList">
+              <option value="Stone Wash"><option value="Enzyme Wash"><option value="Bleach Wash">
+              <option value="PP Spray"><option value="Whiskering"><option value="Tack">
+              <option value="Rinse"><option value="Hand Scraping"><option value="Ozone">
+              <option value="Garment Dye"><option value="Laser">
+            </datalist>
+          </div>
+
+          <div>
+            <label>Wash Metric (Difficulty)</label>
+            <select id="wash_metric">
+              <option value="Easy">Easy</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="Hard">Hard</option>
+              <option value="Very Hard">Very Hard</option>
+            </select>
+          </div>
+          <div>
+            <label>Days in Washing</label>
+            <input type="number" id="days_in_washing" min="0" value="0">
+          </div>
+
+          <div>
+            <label>Planned Units</label>
+            <input type="number" id="planned_units" min="0" value="0">
+          </div>
+          <div>
+            <label>Units Despatched</label>
+            <input type="number" id="units_despatched" min="0" value="0">
+          </div>
+
+          <div>
+            <label>Complete Date</label>
+            <input type="date" id="complete_date">
+          </div>
+          <div>
+            <label>Despatch Date</label>
+            <input type="date" id="despatch_date">
+          </div>
+
+          <div>
+            <label>Sample Received</label>
+            <div class="radio-row">
+              <label><input type="radio" name="sample_received" value="yes"> Yes</label>
+              <label><input type="radio" name="sample_received" value="no" checked> No</label>
+            </div>
+          </div>
+          <div>
+            <label>Status</label>
+            <input type="text" id="status" list="statusList" placeholder="e.g. In Progress">
+            <datalist id="statusList">
+              <option value="Not Started"><option value="In Progress"><option value="On Hold">
+              <option value="Complete"><option value="Despatched"><option value="Late">
+            </datalist>
+          </div>
+
+          <div class="full">
+            <label>Comments</label>
+            <textarea id="comments" rows="2" placeholder="Notes about this job..."></textarea>
+          </div>
+
+          <div class="full">
+            <fieldset>
+              <legend>Delivery Planning</legend>
+              <div class="drops-table">
+                <div class="drops-head"><span>Drop</span><span>Date</span><span>Units Delivered</span><span></span></div>
+                <div id="dropsContainer"></div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" id="addDropBtn">+ Add Drop</button>
+              <div class="drop-total" id="dropTotal">Total received: 0 / 0 planned (0%)</div>
+              <div class="lead-last-row">
+                <div>
+                  <label>Lead Time (days)</label>
+                  <input type="number" id="lead_time_days" min="0" value="0">
+                </div>
+                <div>
+                  <label>Last Drop Date</label>
+                  <input type="date" id="last_drop_date">
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="full">
+            <fieldset>
+              <legend>Balances (units outstanding)</legend>
+              <div class="balance-grid">
+                <div><label>Laundry</label><input type="number" id="balance_laundry" min="0" value="0"></div>
+                <div><label>Production</label><input type="number" id="balance_production" min="0" value="0"></div>
+                <div><label>Spraying</label><input type="number" id="balance_spraying" min="0" value="0"></div>
+                <div><label>Manual</label><input type="number" id="balance_manual" min="0" value="0"></div>
+                <div><label>Laser</label><input type="number" id="balance_laser" min="0" value="0"></div>
+                <div><label>Finishing</label><input type="number" id="balance_finishing" min="0" value="0"></div>
+              </div>
+            </fieldset>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn">Save Job Card</button>
+          <button type="button" class="btn btn-ghost" id="cancelEditBtn" style="display:none;">Cancel Edit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="modal-overlay" id="importModal">
@@ -539,7 +557,7 @@
       <button type="button" id="closeImportBtn">✕</button>
     </div>
     <div class="modal-body">
-      <p class="modal-hint">Upload a CSV file with a header row matching your spreadsheet columns (CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments). Dates like "19 Jun" get the year below applied.</p>
+      <p class="modal-hint">Upload a CSV file with a header row matching your spreadsheet columns (CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, Start Date, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments). Dates like "19 Jun" get the year below applied.</p>
       <div class="import-toolrow">
         <div>
           <label>Year for dates</label>
@@ -769,7 +787,15 @@ function resetForm(){
   document.getElementById('submitBtn').textContent = 'Save Job Card';
   document.getElementById('cancelEditBtn').style.display = 'none';
 }
-document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
+function openJobDrawer(){ document.getElementById('jobDrawerOverlay').classList.add('open'); }
+function closeJobDrawer(){ document.getElementById('jobDrawerOverlay').classList.remove('open'); }
+document.getElementById('openNewJobBtn').addEventListener('click', ()=>{ resetForm(); openJobDrawer(); });
+document.getElementById('closeJobDrawerBtn').addEventListener('click', closeJobDrawer);
+document.getElementById('jobDrawerOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'jobDrawerOverlay') closeJobDrawer();
+});
+document.getElementById('cancelEditBtn').addEventListener('click', ()=>{ resetForm(); closeJobDrawer(); });
 
 /* ---------------- CRUD ---------------- */
 document.getElementById('jobForm').addEventListener('submit', async (e)=>{
@@ -779,6 +805,7 @@ document.getElementById('jobForm').addEventListener('submit', async (e)=>{
     toast('CMT name, style number and order number are required.', true);
     return;
   }
+  const wasEdit = !!editingId;
   try{
     if(editingId){
       if(supa){
@@ -801,6 +828,7 @@ document.getElementById('jobForm').addEventListener('submit', async (e)=>{
     resetForm();
     renderJobsTable();
     populateProcessFilter();
+    if(wasEdit) closeJobDrawer();
   }catch(err){
     console.error(err);
     toast('Save failed: ' + (err.message || err), true);
@@ -833,8 +861,7 @@ function editJob(id){
   document.getElementById('formModeChip').textContent = 'EDIT';
   document.getElementById('submitBtn').textContent = 'Update Job Card';
   document.getElementById('cancelEditBtn').style.display = 'inline-block';
-  document.querySelector('[data-tab=jobcard]').click();
-  window.scrollTo({top:0, behavior:'smooth'});
+  openJobDrawer();
 }
 
 async function loadJobs(){
@@ -1237,7 +1264,7 @@ function buildJobFromCells(headers, cells, year){
       cmt_name, style_number, order_number,
       process: get('PROCESS'),
       wash_metric,
-      start_date: null,
+      start_date: parseShortDate(get('START DATE'), year),
       style_delivery_date: parseShortDate(get('DELIVERY DATE'), year),
       days_in_washing: parseIntSafe(get('DAYS IN WASHING')),
       planned_units: parseIntSafe(get('PLANNED UNITS')),
@@ -1283,6 +1310,31 @@ function parseCSV(text){
   return rows.filter(r => r.some(cell => cell.trim() !== ''));
 }
 
+function dupKey(job){
+  return (job.order_number || '').trim().toUpperCase();
+}
+
+function diffFields(existing, incoming){
+  const fields = [
+    ['planned_units','Planned'], ['units_received','Received'], ['units_despatched','Despatched'],
+    ['wash_metric','Wash'], ['status','Status'], ['process','Process'],
+    ['style_delivery_date','Delivery'], ['despatch_date','Despatch'], ['complete_date','Complete'],
+    ['last_drop_date','Last Drop'], ['lead_time_days','Lead Time'], ['days_in_washing','Days Washing'],
+    ['balance_laundry','Bal. Laundry'], ['balance_production','Bal. Production'],
+    ['balance_spraying','Bal. Spraying'], ['balance_manual','Bal. Manual'],
+    ['balance_laser','Bal. Laser'], ['balance_finishing','Bal. Finishing'],
+  ];
+  const changes = [];
+  fields.forEach(([key,label])=>{
+    const oldVal = existing[key] ?? '';
+    const newVal = incoming[key] ?? '';
+    if(String(oldVal) !== String(newVal)){
+      changes.push(`${label}: ${oldVal===''?'—':oldVal} → ${newVal===''?'—':newVal}`);
+    }
+  });
+  return changes;
+}
+
 function runImportPreview(headers, dataRows, year){
   const jobsOut = [];
   const errors = [];
@@ -1291,48 +1343,116 @@ function runImportPreview(headers, dataRows, year){
     if(result.error){ errors.push(`Row ${i+2}: ${result.error}`); }
     else { jobsOut.push(result.job); }
   });
-  pendingImportJobs = jobsOut;
+
+  // Rows matching an existing job (by Order Number) become updates.
+  // Rows repeated within the same file are flagged as file duplicates.
+  const existingByKey = new Map();
+  jobs.forEach(j=>{ const k = dupKey(j); if(k) existingByKey.set(k, j); });
+
+  const seenInBatch = new Set();
+  const toInsert = [];
+  const toUpdate = [];
+  const fileDups = [];
+
+  jobsOut.forEach(job=>{
+    const key = dupKey(job);
+    if(key && seenInBatch.has(key)){
+      fileDups.push({job, reason:`Duplicate within file — Order # ${job.order_number}`});
+      return;
+    }
+    if(key) seenInBatch.add(key);
+    if(key && existingByKey.has(key)){
+      toUpdate.push({job, existing: existingByKey.get(key)});
+    } else {
+      toInsert.push(job);
+    }
+  });
+
+  pendingImportJobs = toInsert;
+  pendingUpdateJobs = toUpdate;
+  pendingDuplicateJobs = fileDups;
+
   const previewEl = document.getElementById('importPreview');
-  let html = `<div class="import-summary ${errors.length ? 'warn' : 'ok'}">${jobsOut.length} row${jobsOut.length===1?'':'s'} ready to import${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
+  let html = `<div class="import-summary ${errors.length || fileDups.length ? 'warn' : 'ok'}">${toInsert.length} new row${toInsert.length===1?'':'s'} to import, ${toUpdate.length} existing record${toUpdate.length===1?'':'s'} will be updated${fileDups.length ? `, ${fileDups.length} duplicate${fileDups.length===1?'':'s'} within file excluded` : ''}${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
+
   if(errors.length){
     html += `<div class="import-summary warn" style="margin-top:8px;">${errors.slice(0,5).map(escAttr).join('<br>')}${errors.length>5 ? `<br>+ ${errors.length-5} more` : ''}</div>`;
   }
-  if(jobsOut.length){
-    html += `<table class="import-preview-table"><thead><tr><th>CMT</th><th>Style #</th><th>Order #</th><th>Wash</th><th>Planned</th><th>Received</th><th>Despatch</th></tr></thead><tbody>`;
-    html += jobsOut.slice(0,8).map(j=>`<tr><td>${escAttr(j.cmt_name)}</td><td>${escAttr(j.style_number)}</td><td>${escAttr(j.order_number)}</td><td>${escAttr(j.wash_metric)}</td><td>${j.planned_units}</td><td>${j.units_received}</td><td>${j.despatch_date||'—'}</td></tr>`).join('');
-    html += `</tbody></table>`;
-    if(jobsOut.length > 8) html += `<div style="font-size:11.5px; color:var(--muted); margin-top:6px;">+ ${jobsOut.length-8} more rows not shown</div>`;
-    html += `<div class="form-actions"><button type="button" class="btn btn-primary" id="commitImportBtn">Import ${jobsOut.length} Job Card${jobsOut.length===1?'':'s'}</button></div>`;
+
+  if(toUpdate.length){
+    html += `<div class="import-summary ok" style="margin-top:8px;">
+      <strong>Matches existing job cards</strong> — checked rows will overwrite the existing record with the CSV values.
+      <table class="import-preview-table" style="margin-top:8px;"><thead><tr><th></th><th>CMT</th><th>Style #</th><th>Order #</th><th>Changes</th></tr></thead><tbody>`;
+    html += toUpdate.map((u,i)=>{
+      const changes = diffFields(u.existing, u.job);
+      return `<tr>
+        <td><input type="checkbox" class="update-include-check" data-idx="${i}" checked></td>
+        <td>${escAttr(u.job.cmt_name)}</td>
+        <td>${escAttr(u.job.style_number)}</td>
+        <td>${escAttr(u.job.order_number)}</td>
+        <td style="font-size:11px;">${changes.length ? changes.map(escAttr).join('<br>') : 'No changes detected'}</td>
+      </tr>`;
+    }).join('');
+    html += `</tbody></table></div>`;
   }
+
+  if(fileDups.length){
+    html += `<div class="import-summary warn" style="margin-top:8px;">
+      <strong>Duplicate rows within this file</strong> — unchecked rows will be skipped. Tick "include" to import as a new record anyway.
+      <table class="import-preview-table" style="margin-top:8px;"><thead><tr><th></th><th>CMT</th><th>Style #</th><th>Order #</th><th>Reason</th></tr></thead><tbody>`;
+    html += fileDups.map((d,i)=>`<tr>
+        <td><input type="checkbox" class="dup-include-check" data-idx="${i}"></td>
+        <td>${escAttr(d.job.cmt_name)}</td>
+        <td>${escAttr(d.job.style_number)}</td>
+        <td>${escAttr(d.job.order_number)}</td>
+        <td>${escAttr(d.reason)}</td>
+      </tr>`).join('');
+    html += `</tbody></table></div>`;
+  }
+
+  if(toInsert.length){
+    html += `<table class="import-preview-table"><thead><tr><th>CMT</th><th>Style #</th><th>Order #</th><th>Wash</th><th>Planned</th><th>Received</th><th>Despatch</th></tr></thead><tbody>`;
+    html += toInsert.slice(0,8).map(j=>`<tr><td>${escAttr(j.cmt_name)}</td><td>${escAttr(j.style_number)}</td><td>${escAttr(j.order_number)}</td><td>${escAttr(j.wash_metric)}</td><td>${j.planned_units}</td><td>${j.units_received}</td><td>${j.despatch_date||'—'}</td></tr>`).join('');
+    html += `</tbody></table>`;
+    if(toInsert.length > 8) html += `<div style="font-size:11.5px; color:var(--muted); margin-top:6px;">+ ${toInsert.length-8} more rows not shown</div>`;
+  }
+
+  if(toInsert.length || toUpdate.length || fileDups.length){
+    html += `<div class="form-actions"><button type="button" class="btn btn-primary" id="commitImportBtn">Import / Update Job Cards</button></div>`;
+  }
+
   previewEl.innerHTML = html;
-  if(jobsOut.length){
+  if(toInsert.length || toUpdate.length || fileDups.length){
     document.getElementById('commitImportBtn').addEventListener('click', commitImport);
   }
 }
 
 // Sample dataset — the data supplied for configuring this tool.
-const SAMPLE_HEADERS = ["CMT","STYLE NO","ORDERNO","PROCESS","WASH METRIC","PLANNED UNITS","SAMPLE RECEIVED","1ST DROP DATE","2ND DROP DATE","LAST DATE","UNITS RECEIVED","UNITS DESPATCHED","BALANCE IN LAUNDRY","PRODUCTION BALANCE","DAYS IN WASHING","SPRAYING AUTO","MANUAL","SPRAY BALANCE","LAZER","LAZER BALANCE","FINISHING","FINISHING BALANCE","LEAD TIME (DAYS)","COMPLETE DATE","DESPATCH DATE","DELIVERY DATE","STATUS","COMMENTS"];
+const SAMPLE_HEADERS = ["CMT","STYLE NO","ORDERNO","PROCESS","WASH METRIC","PLANNED UNITS","SAMPLE RECEIVED","START DATE","1ST DROP DATE","2ND DROP DATE","LAST DATE","UNITS RECEIVED","UNITS DESPATCHED","BALANCE IN LAUNDRY","PRODUCTION BALANCE","DAYS IN WASHING","SPRAYING AUTO","MANUAL","SPRAY BALANCE","LAZER","LAZER BALANCE","FINISHING","FINISHING BALANCE","LEAD TIME (DAYS)","COMPLETE DATE","DESPATCH DATE","DELIVERY DATE","STATUS","COMMENTS"];
 const SAMPLE_ROWS = [
-["JKT FACTORY","DN134635","DNLWDR144010","DENIM MED BLEACH ONLY","EASY","4137","YES","19 Jun","","03 Jul","2642","1857","785","1495","13","","","","","","","","4","09 Jul","","","",""],
-["KINGSPARK","DN134609","DNMPA143958","DENIM LT BLE/W/SB/T","EASY","1545","YES","08 Jun","","09 Jun","1545","","1545","","22","","","","","","","","7","07 Jun","09 Jul","","",""],
-["KINGSPARK","DN134937","DNLWPA140798-2","Denim cru/med bl/w/sb/t","MEDIUM","1545","YES","17 Jun","","19 Jun","1545","","1545","","15","","","","","","","","7","06 Jul","09 Jul","","",""],
-["KINGSPARK","DN135038","DNMPA142887-1","Denim per ble/sb/trim threads","HARD","2060","YES","17 Jun","","19 Jun","2118","798","1320","","15","","","","","","","","7","08 Jul","09 Jul","","",""],
-["KINGSPARK","DN135037","DNMPA142888-2","Denim med ble/sb/trim threads","HARD","2060","YES","19 Jun","","23 Jun","2109","1805","304","","13","","","","","","","","8","09 Jul","10 Jul","","",""],
-["KINGSPARK","DN134637","DNLWPA143206-1","Denim lw/med bl/sb","MEDIUM","3090","YES","19 Jun","","19 Jun","3066","","3066","","13","","","","","","","","7","06 Jul","14 Jul","","",""],
-["KINGSPARK","DN134653","DNLWPA144177","Denim lw/med ble/sb","MEDIUM","4000","YES","25 Jun","","29 Jun","3700","","3700","300","9","","","","","","","","7","07 Jul","14 Jul","","",""],
-["KINGSPARK","DN135125","DNWPA143749","Denim lw/per ble/sb","HARD","1854","YES","24 Jun","","25 Jun","1855","","1855","","10","","","","","","","","7","07 Jul","16 Jul","","",""],
-["KINGSPARK","DN135563","DNLWPA139327-2","Denim lw/per ble","MEDIUM","4120","YES","23 Jun","","25 Jun","4105","","4105","","11","","","","","","","","7","09 Jul","16 Jul","","",""],
-["KINGSPARK","DN135493","DNLWPA144119","Denim lw/dark wash/sb/t","VERY HARD","4120","YES","29 Jun","","06 Jul","2240","","2240","1880","7","","","","","","","","9","16 Jul","21 Jul","","",""],
-["KINGSPARK","DN134857","DNLWPA144279","Denim lw/t/med ble/sb","MEDIUM","4000","YES","01 Jul","","02 Jul","4068","","3200","","5","","","","","","","","7","30 Jul","31 Jul","","",""],
-["KINGSPARK","DN135494","DNLWPA145332","Denim lw/dark wash/sb/t","VERY HARD","2060","YES","06 Jul","","06 Jul","250","","250","1810","2","","","","","","","","7","","","","",""],
-["PRESTIGE","DN134507","DNLWDR143782","Denim Med ble/aos/tint","MEDIUM","1030","YES","19 Jun","","26 Jun","1025","","1025","","13","","","","","","","","7","11 Jul","17 Jul","","",""],
-["PRESTIGE","DN135705","DNLWPA143812","Denim med ble only","MEDIUM","2266","YES","22 Jun","","26 Jun","2100","624","1476","166","12","","","","","","","","4","11 Jul","13 Jul","","",""],
-["PRESTIGE","DN135670","DNLWPA142719","Denim med ble only","MEDIUM","2269","YES","23 Jun","","26 Jun","1070","","1070","1199","13","","","","","","","","4","07 Jul","23 Jul","","",""],
-["PRESTIGE","DN135219","DNLWPA143008","Denim lt ble only","EASY","3916","YES","29 Jun","","03 Jul","1050","","1050","2866","7","","","","","","","","7","20 Jul","24 Jul","","",""],
-["PRESTIGE","DN135644","DNLWTP42726","Denim lt ble only","EASY","3914","YES","03 Jul","","03 Jul","50","","50","3864","3","","","","","","","","7","29 Jul","30 Jul","","",""],
+["JKT FACTORY", "DN134635", "DNLWDR144010", "DENIM MED BLEACH ONLY", "EASY", "4137", "YES", "", "19 Jun", "", "03 Jul", "2642", "1857", "785", "1495", "13", "", "", "", "", "", "", "", "4", "09 Jul", "", "", "", ""],
+["KINGSPARK", "DN134609", "DNMPA143958", "DENIM LT BLE/W/SB/T", "EASY", "1545", "YES", "", "08 Jun", "", "09 Jun", "1545", "", "1545", "", "22", "", "", "", "", "", "", "", "7", "07 Jun", "09 Jul", "", "", ""],
+["KINGSPARK", "DN134937", "DNLWPA140798-2", "Denim cru/med bl/w/sb/t", "MEDIUM", "1545", "YES", "", "17 Jun", "", "19 Jun", "1545", "", "1545", "", "15", "", "", "", "", "", "", "", "7", "06 Jul", "09 Jul", "", "", ""],
+["KINGSPARK", "DN135038", "DNMPA142887-1", "Denim per ble/sb/trim threads", "HARD", "2060", "YES", "", "17 Jun", "", "19 Jun", "2118", "798", "1320", "", "15", "", "", "", "", "", "", "", "7", "08 Jul", "09 Jul", "", "", ""],
+["KINGSPARK", "DN135037", "DNMPA142888-2", "Denim med ble/sb/trim threads", "HARD", "2060", "YES", "", "19 Jun", "", "23 Jun", "2109", "1805", "304", "", "13", "", "", "", "", "", "", "", "8", "09 Jul", "10 Jul", "", "", ""],
+["KINGSPARK", "DN134637", "DNLWPA143206-1", "Denim lw/med bl/sb", "MEDIUM", "3090", "YES", "", "19 Jun", "", "19 Jun", "3066", "", "3066", "", "13", "", "", "", "", "", "", "", "7", "06 Jul", "14 Jul", "", "", ""],
+["KINGSPARK", "DN134653", "DNLWPA144177", "Denim lw/med ble/sb", "MEDIUM", "4000", "YES", "", "25 Jun", "", "29 Jun", "3700", "", "3700", "300", "9", "", "", "", "", "", "", "", "7", "07 Jul", "14 Jul", "", "", ""],
+["KINGSPARK", "DN135125", "DNWPA143749", "Denim lw/per ble/sb", "HARD", "1854", "YES", "", "24 Jun", "", "25 Jun", "1855", "", "1855", "", "10", "", "", "", "", "", "", "", "7", "07 Jul", "16 Jul", "", "", ""],
+["KINGSPARK", "DN135563", "DNLWPA139327-2", "Denim lw/per ble", "MEDIUM", "4120", "YES", "", "23 Jun", "", "25 Jun", "4105", "", "4105", "", "11", "", "", "", "", "", "", "", "7", "09 Jul", "16 Jul", "", "", ""],
+["KINGSPARK", "DN135493", "DNLWPA144119", "Denim lw/dark wash/sb/t", "VERY HARD", "4120", "YES", "", "29 Jun", "", "06 Jul", "2240", "", "2240", "1880", "7", "", "", "", "", "", "", "", "9", "16 Jul", "21 Jul", "", "", ""],
+["KINGSPARK", "DN134857", "DNLWPA144279", "Denim lw/t/med ble/sb", "MEDIUM", "4000", "YES", "", "01 Jul", "", "02 Jul", "4068", "", "3200", "", "5", "", "", "", "", "", "", "", "7", "30 Jul", "31 Jul", "", "", ""],
+["KINGSPARK", "DN135494", "DNLWPA145332", "Denim lw/dark wash/sb/t", "VERY HARD", "2060", "YES", "", "06 Jul", "", "06 Jul", "250", "", "250", "1810", "2", "", "", "", "", "", "", "", "7", "", "", "", "", ""],
+["PRESTIGE", "DN134507", "DNLWDR143782", "Denim Med ble/aos/tint", "MEDIUM", "1030", "YES", "", "19 Jun", "", "26 Jun", "1025", "", "1025", "", "13", "", "", "", "", "", "", "", "7", "11 Jul", "17 Jul", "", "", ""],
+["PRESTIGE", "DN135705", "DNLWPA143812", "Denim med ble only", "MEDIUM", "2266", "YES", "", "22 Jun", "", "26 Jun", "2100", "624", "1476", "166", "12", "", "", "", "", "", "", "", "4", "11 Jul", "13 Jul", "", "", ""],
+["PRESTIGE", "DN135670", "DNLWPA142719", "Denim med ble only", "MEDIUM", "2269", "YES", "", "23 Jun", "", "26 Jun", "1070", "", "1070", "1199", "13", "", "", "", "", "", "", "", "4", "07 Jul", "23 Jul", "", "", ""],
+["PRESTIGE", "DN135219", "DNLWPA143008", "Denim lt ble only", "EASY", "3916", "YES", "", "29 Jun", "", "03 Jul", "1050", "", "1050", "2866", "7", "", "", "", "", "", "", "", "7", "20 Jul", "24 Jul", "", "", ""],
+["PRESTIGE", "DN135644", "DNLWTP42726", "Denim lt ble only", "EASY", "3914", "YES", "", "03 Jul", "", "03 Jul", "50", "", "50", "3864", "3", "", "", "", "", "", "", "", "7", "29 Jul", "30 Jul", "", "", ""],
+
 ];
 
 let pendingImportJobs = [];
+let pendingUpdateJobs = [];
+let pendingDuplicateJobs = [];
 
 function openImportModal(){ document.getElementById('importModal').classList.add('show'); }
 function closeImportModal(){
@@ -1341,6 +1461,8 @@ function closeImportModal(){
   document.getElementById('importFileName').textContent = '';
   document.getElementById('importFileInput').value = '';
   pendingImportJobs = [];
+  pendingUpdateJobs = [];
+  pendingDuplicateJobs = [];
 }
 document.getElementById('openImportBtn').addEventListener('click', openImportModal);
 document.getElementById('closeImportBtn').addEventListener('click', closeImportModal);
@@ -1371,26 +1493,48 @@ document.getElementById('importFileInput').addEventListener('change', (e)=>{
 });
 
 async function commitImport(){
-  if(pendingImportJobs.length === 0) return;
+  const checkedDupIndexes = [...document.querySelectorAll('.dup-include-check:checked')].map(el=>Number(el.dataset.idx));
+  const includedDups = pendingDuplicateJobs.filter((_,i)=>checkedDupIndexes.includes(i)).map(d=>d.job);
+  const toInsert = [...pendingImportJobs, ...includedDups];
+
+  const checkedUpdateIndexes = [...document.querySelectorAll('.update-include-check:checked')].map(el=>Number(el.dataset.idx));
+  const toUpdate = pendingUpdateJobs.filter((_,i)=>checkedUpdateIndexes.includes(i));
+
+  if(toInsert.length === 0 && toUpdate.length === 0){ toast('Nothing selected to import.', true); return; }
   const btn = document.getElementById('commitImportBtn');
   if(btn){ btn.disabled = true; btn.textContent = 'Importing…'; }
   try{
-    if(supa){
-      const {data: inserted, error} = await supa.from('wash_jobs').insert(pendingImportJobs).select();
-      if(error) throw error;
-      jobs = [...inserted, ...jobs];
-    } else {
-      const withIds = pendingImportJobs.map(j=>({...j, id:'local-'+Math.random().toString(36).slice(2), created_at:new Date().toISOString()}));
-      jobs = [...withIds, ...jobs];
+    if(toInsert.length){
+      if(supa){
+        const {data: inserted, error} = await supa.from('wash_jobs').insert(toInsert).select();
+        if(error) throw error;
+        jobs = [...inserted, ...jobs];
+      } else {
+        const withIds = toInsert.map(j=>({...j, id:'local-'+Math.random().toString(36).slice(2), created_at:new Date().toISOString()}));
+        jobs = [...withIds, ...jobs];
+      }
     }
-    toast(`Imported ${pendingImportJobs.length} job card${pendingImportJobs.length===1?'':'s'}.`);
+    if(toUpdate.length){
+      for(const {job, existing} of toUpdate){
+        if(supa){
+          const {error} = await supa.from('wash_jobs').update(job).eq('id', existing.id);
+          if(error) throw error;
+        }
+        const idx = jobs.findIndex(j=>j.id === existing.id);
+        if(idx > -1) jobs[idx] = {...jobs[idx], ...job};
+      }
+    }
+    const parts = [];
+    if(toInsert.length) parts.push(`${toInsert.length} new`);
+    if(toUpdate.length) parts.push(`${toUpdate.length} updated`);
+    toast(`Import complete — ${parts.join(', ')}.`);
     renderJobsTable();
     populateProcessFilter();
     closeImportModal();
   }catch(err){
     console.error(err);
     toast('Import failed: ' + (err.message || err), true);
-    if(btn){ btn.disabled = false; btn.textContent = `Import ${pendingImportJobs.length} Job Cards`; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Import / Update Job Cards'; }
   }
 }
 
