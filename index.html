@@ -341,12 +341,12 @@
         <table>
           <thead>
             <tr>
-              <th>CMT</th><th>Style #</th><th>Order #</th><th>Process</th><th>Wash</th><th>Days Wash</th>
+              <th>CMT</th><th>Style #</th><th>Order #</th><th>PIS Month</th><th>Process</th><th>Wash</th><th>Days Wash</th>
               <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Recv %</th><th>Despatched</th><th>Desp %</th><th>Status</th><th></th>
             </tr>
           </thead>
           <tbody id="jobsTableBody">
-            <tr class="empty-row"><td colspan="15">No job cards yet — click "+ New Job Card" to add one.</td></tr>
+            <tr class="empty-row"><td colspan="16">No job cards yet — click "+ New Job Card" to add one.</td></tr>
           </tbody>
         </table>
       </div>
@@ -454,6 +454,15 @@
           <div>
             <label>Order Number</label>
             <input type="text" id="order_number" required placeholder="e.g. ORD-8801">
+          </div>
+          <div>
+            <label>PIS Month</label>
+            <input type="text" id="pis_month" placeholder="e.g. Jul-26">
+          </div>
+
+          <div class="full">
+            <label>Description</label>
+            <input type="text" id="description" placeholder="e.g. Men's Slim Fit Jean">
           </div>
 
           <div>
@@ -584,7 +593,7 @@
       <button type="button" id="closeImportBtn">✕</button>
     </div>
     <div class="modal-body">
-      <p class="modal-hint">Upload a CSV file with a header row matching your spreadsheet columns (CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, Start Date, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments). Dates like "19 Jun" get the year below applied.</p>
+      <p class="modal-hint">Upload a CSV — the format is auto-detected from its header row. <strong>Active Jobs</strong>: CMT, Style No, Order No, Process, Wash Metric, Planned Units, Sample Received, Start Date, 1st/2nd Drop Date, Last Date, Units Received, Units Despatched, balances, Days In Washing, Lead Time, Complete/Despatch/Delivery Date, Status, Comments. <strong>Planned Jobs</strong>: Job Number, Description, Units, PIS Month, Wash Metric, CMT, Delivery Date, Feed Start, Feed End to Laundry, Return Date from Laundry, Lead Times, Style Number. Dates like "19 Jun" get the year below applied.</p>
       <div class="import-toolrow">
         <div>
           <label>Year for dates</label>
@@ -612,6 +621,18 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 let supa = null;
 let jobs = [];
+
+// Full default shape for a job — used to backfill local (no-Supabase) inserts
+// so partial import formats (like Planned Jobs) don't leave fields undefined.
+const JOB_DEFAULTS = {
+  description:'', pis_month:'', process:'', wash_metric:'Medium',
+  start_date:null, style_delivery_date:null, days_in_washing:0,
+  planned_units:0, sample_received:false, status:'', comments:'',
+  units_received:0, units_despatched:0, complete_date:null, despatch_date:null,
+  drops:[], lead_time_days:0, last_drop_date:null,
+  balance_laundry:0, balance_production:0, balance_spraying:0,
+  balance_manual:0, balance_laser:0, balance_finishing:0,
+};
 let editingId = null;
 let tableViewMode = 'active';      // 'active' | 'planned' | 'archived' — Job Cards table filter
 let dashboardViewMode = 'active';  // 'active' | 'planned' | 'archived' — Dashboard filter
@@ -774,6 +795,8 @@ function readForm(){
     cmt_name: document.getElementById('cmt_name').value.trim(),
     style_number: document.getElementById('style_number').value.trim(),
     order_number: document.getElementById('order_number').value.trim(),
+    pis_month: document.getElementById('pis_month').value.trim(),
+    description: document.getElementById('description').value.trim(),
     start_date: document.getElementById('start_date').value || null,
     style_delivery_date: document.getElementById('style_delivery_date').value || null,
     process: document.getElementById('process').value.trim(),
@@ -803,6 +826,8 @@ function fillForm(job){
   document.getElementById('cmt_name').value = job.cmt_name || '';
   document.getElementById('style_number').value = job.style_number || '';
   document.getElementById('order_number').value = job.order_number || '';
+  document.getElementById('pis_month').value = job.pis_month || '';
+  document.getElementById('description').value = job.description || '';
   document.getElementById('start_date').value = job.start_date || '';
   document.getElementById('style_delivery_date').value = job.style_delivery_date || '';
   document.getElementById('process').value = job.process || '';
@@ -962,7 +987,7 @@ function renderJobsTable(){
   const list = filteredJobs();
   document.getElementById('jobCountChip').textContent = list.length;
   if(list.length === 0){
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="15">No ${tableViewMode} job cards match — add one, or clear filters.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="16">No ${tableViewMode} job cards match — add one, or clear filters.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(j=>{
@@ -975,6 +1000,7 @@ function renderJobsTable(){
       <td>${escAttr(j.cmt_name)}</td>
       <td class="mono">${escAttr(j.style_number)}${atRisk ? ' <span class="risk-flag" title="At risk — past delivery date, not yet fully despatched">⚠</span>' : ''}</td>
       <td class="mono">${escAttr(j.order_number)}</td>
+      <td>${escAttr(j.pis_month || '—')}</td>
       <td>${escAttr(j.process || '—')}</td>
       <td><span class="pill ${metricPillClass(j.wash_metric)}">${escAttr(j.wash_metric || '—')}</span></td>
       <td>${j.days_in_washing ?? '—'}</td>
@@ -1317,7 +1343,7 @@ function parseIntSafe(v){
   return isNaN(n) ? 0 : n;
 }
 
-function buildJobFromCells(headers, cells, year){
+function buildJobFromCellsActive(headers, cells, year){
   const get = (name)=>{
     const idx = headers.indexOf(name);
     return idx > -1 ? (cells[idx] || '').trim() : '';
@@ -1377,6 +1403,49 @@ function buildJobFromCells(headers, cells, year){
   };
 }
 
+// Planned Jobs import format — lighter sheet used before a job reaches the
+// wash house (no receiving/balance data yet). "Job Number" becomes the
+// order_number so it lines up with the same duplicate/update matching used
+// for the Active format.
+function buildJobFromCellsPlanned(headers, cells, year){
+  const get = (name)=>{
+    const idx = headers.indexOf(name);
+    return idx > -1 ? (cells[idx] || '').trim() : '';
+  };
+  const cmt_name = get('CMT');
+  const style_number = get('STYLE NUMBER');
+  const order_number = get('JOB NUMBER');
+  if(!cmt_name || !style_number || !order_number){
+    return {error: 'Missing CMT / Style Number / Job Number'};
+  }
+
+  const washRaw = get('WASH METRIC').toUpperCase();
+  const washMap = {EASY:'Easy', MEDIUM:'Medium', HARD:'Hard', 'VERY HARD':'Very Hard'};
+  const wash_metric = washMap[washRaw] || 'Medium';
+
+  return {
+    job: {
+      cmt_name, style_number, order_number,
+      description: get('DESCRIPTION'),
+      pis_month: get('PIS MONTH'),
+      planned_units: parseIntSafe(get('UNITS')),
+      wash_metric,
+      style_delivery_date: parseShortDate(get('DELIVERY DATE'), year),
+      start_date: parseShortDate(get('FEED START'), year),
+      last_drop_date: parseShortDate(get('FEED END TO LAUNDRY'), year),
+      complete_date: parseShortDate(get('RETURN DATE FROM LAUNDRY'), year),
+      lead_time_days: parseIntSafe(get('LEAD TIMES')),
+    }
+  };
+}
+
+// Detects which import format a CSV is by looking at its header row.
+function detectImportFormat(headers){
+  if(headers.includes('JOB NUMBER') || headers.includes('FEED START')) return 'planned';
+  if(headers.includes('ORDERNO')) return 'active';
+  return 'unknown';
+}
+
 function parseCSV(text){
   const rows = [];
   let row = [], field = '', inQuotes = false;
@@ -1405,6 +1474,7 @@ function dupKey(job){
 
 function diffFields(existing, incoming){
   const fields = [
+    ['description','Description'], ['pis_month','PIS Month'], ['start_date','Start'],
     ['planned_units','Planned'], ['units_received','Received'], ['units_despatched','Despatched'],
     ['wash_metric','Wash'], ['status','Status'], ['process','Process'],
     ['style_delivery_date','Delivery'], ['despatch_date','Despatch'], ['complete_date','Complete'],
@@ -1425,10 +1495,20 @@ function diffFields(existing, incoming){
 }
 
 function runImportPreview(headers, dataRows, year){
+  const format = detectImportFormat(headers);
+  if(format === 'unknown'){
+    document.getElementById('importPreview').innerHTML = `<div class="import-summary warn">Couldn't recognise these columns. Expected either the Active Jobs format (headers include "ORDERNO") or the Planned Jobs format (headers include "Job Number" / "Feed Start").</div>`;
+    pendingImportJobs = [];
+    pendingUpdateJobs = [];
+    pendingDuplicateJobs = [];
+    return;
+  }
+  const builder = format === 'planned' ? buildJobFromCellsPlanned : buildJobFromCellsActive;
+
   const jobsOut = [];
   const errors = [];
   dataRows.forEach((cells, i)=>{
-    const result = buildJobFromCells(headers, cells, year);
+    const result = builder(headers, cells, year);
     if(result.error){ errors.push(`Row ${i+2}: ${result.error}`); }
     else { jobsOut.push(result.job); }
   });
@@ -1462,7 +1542,9 @@ function runImportPreview(headers, dataRows, year){
   pendingDuplicateJobs = fileDups;
 
   const previewEl = document.getElementById('importPreview');
-  let html = `<div class="import-summary ${errors.length || fileDups.length ? 'warn' : 'ok'}">${toInsert.length} new row${toInsert.length===1?'':'s'} to import, ${toUpdate.length} existing record${toUpdate.length===1?'':'s'} will be updated${fileDups.length ? `, ${fileDups.length} duplicate${fileDups.length===1?'':'s'} within file excluded` : ''}${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
+  const formatLabel = format === 'planned' ? 'Planned Jobs' : 'Active Jobs';
+  let html = `<div class="import-summary" style="background:var(--card-lavender);">Detected format: <strong>${formatLabel}</strong></div>`;
+  html += `<div class="import-summary ${errors.length || fileDups.length ? 'warn' : 'ok'}">${toInsert.length} new row${toInsert.length===1?'':'s'} to import, ${toUpdate.length} existing record${toUpdate.length===1?'':'s'} will be updated${fileDups.length ? `, ${fileDups.length} duplicate${fileDups.length===1?'':'s'} within file excluded` : ''}${errors.length ? `, ${errors.length} skipped` : ''}.</div>`;
 
   if(errors.length){
     html += `<div class="import-summary warn" style="margin-top:8px;">${errors.slice(0,5).map(escAttr).join('<br>')}${errors.length>5 ? `<br>+ ${errors.length-5} more` : ''}</div>`;
@@ -1599,7 +1681,7 @@ async function commitImport(){
         if(error) throw error;
         jobs = [...inserted, ...jobs];
       } else {
-        const withIds = toInsert.map(j=>({...j, id:'local-'+Math.random().toString(36).slice(2), created_at:new Date().toISOString()}));
+        const withIds = toInsert.map(j=>({...JOB_DEFAULTS, ...j, id:'local-'+Math.random().toString(36).slice(2), created_at:new Date().toISOString()}));
         jobs = [...withIds, ...jobs];
       }
     }
