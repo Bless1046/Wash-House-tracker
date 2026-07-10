@@ -373,8 +373,8 @@
     </div>
 
     <div class="kpi-row">
-      <div class="kpi total"><div class="num" id="kpiJobs">0</div><div class="lbl">Job Cards</div></div>
-      <div class="kpi planned"><div class="num" id="kpiPlanned">0</div><div class="lbl">Planned Units</div></div>
+      <div class="kpi total"><div class="num" id="kpiJobs">0</div><div class="lbl" id="kpiJobsLbl">Job Cards</div></div>
+      <div class="kpi planned"><div class="num" id="kpiPlanned">0</div><div class="lbl" id="kpiPlannedLbl">Planned Units</div></div>
       <div class="kpi received"><div class="num" id="kpiReceived">0</div><div class="lbl">Units Received</div><div class="kpi-sub" id="kpiReceivedPct"></div></div>
       <div class="kpi despatched"><div class="num" id="kpiDespatched">0</div><div class="lbl">Units Despatched</div><div class="kpi-sub" id="kpiDespatchedPct"></div></div>
       <div class="kpi late"><div class="num" id="kpiLate">0</div><div class="lbl">Jobs At Risk</div></div>
@@ -660,6 +660,9 @@ function isJobAtRisk(job){
 }
 function jobMatchesView(job, mode){
   return getJobBucket(job) === mode;
+}
+function viewModeLabel(mode){
+  return mode === 'active' ? 'Active' : (mode === 'archived' ? 'Archived' : 'Planned');
 }
 
 const METRIC_COLOR_VAR = {
@@ -1050,7 +1053,9 @@ function renderDashboard(){
   const late = scoped.filter(isJobAtRisk).length;
 
   document.getElementById('kpiJobs').textContent = total;
+  document.getElementById('kpiJobsLbl').textContent = `${viewModeLabel(dashboardViewMode)} Job Cards`;
   document.getElementById('kpiPlanned').textContent = planned.toLocaleString();
+  document.getElementById('kpiPlannedLbl').textContent = `${viewModeLabel(dashboardViewMode)} Units`;
   document.getElementById('kpiReceived').textContent = received.toLocaleString();
   document.getElementById('kpiDespatched').textContent = despatched.toLocaleString();
   document.getElementById('kpiLate').textContent = late;
@@ -1068,7 +1073,7 @@ function renderDashboard(){
 }
 
 function renderHero(scoped, total, late){
-  const modeLabel = dashboardViewMode === 'active' ? 'Active' : (dashboardViewMode === 'archived' ? 'Archived' : 'Planned');
+  const modeLabel = viewModeLabel(dashboardViewMode);
   const avgProgress = total ? Math.round(scoped.reduce((s,j)=>{
     const p = j.planned_units||0, r = j.units_received||0;
     return s + (p>0 ? Math.min(100, r/p*100) : 0);
