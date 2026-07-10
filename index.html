@@ -213,6 +213,9 @@
   .gantt-month{position:absolute; top:0; height:100%; border-left:1px solid var(--line); font-size:11px; color:var(--muted); padding:6px 0 0 6px; font-family:'JetBrains Mono',monospace;}
   .gantt-body{position:relative;}
   .gantt-row{display:flex; align-items:center; height:50px; border-bottom:1px solid var(--line); position:relative;}
+  .gantt-row.at-risk{background:rgba(179,69,44,.07); box-shadow:inset 3px 0 0 var(--hard-red);}
+  .gantt-row.at-risk .gantt-row-label{background:#fbe8e3;}
+  .risk-flag{color:var(--hard-red); font-size:12px;}
   .gantt-row-label{position:sticky; left:0; width:190px; min-width:190px; background:#fff; z-index:2; font-size:12px; padding-right:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .gantt-row-label b{display:block; color:var(--navy); font-size:12.5px;}
   .gantt-row-label span{color:var(--muted); font-size:10.5px;}
@@ -353,7 +356,7 @@
     <div class="hero-bar">
       <div>
         <div class="hero-date" id="heroDate"></div>
-        <div class="hero-title" id="heroTitle">0 Job Cards · 0% Avg Delivery Progress</div>
+        <div class="hero-title" id="heroTitle">0 Job Cards · 0% Avg Feed Progress</div>
         <div class="hero-sub" id="heroSub">0 in progress · 0 complete · 0 late</div>
       </div>
       <div class="hero-chips" id="heroChips"></div>
@@ -404,6 +407,7 @@
         <span class="legend-swatch"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--denim),var(--denim) 3px,var(--denim-dark) 3px,var(--denim-dark) 6px);"></span> Actual (Start → Despatch)</span>
         <span class="legend-swatch"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--hard-red),var(--hard-red) 3px,#8f2e19 3px,#8f2e19 6px);"></span> Despatched late</span>
         <span class="legend-swatch"><span class="sw line" style="background:var(--lime);"></span> Complete (Start → Complete)</span>
+        <span class="legend-swatch"><span class="risk-flag">⚠</span> At Risk — past delivery date, still outstanding</span>
       </div>
       <div class="gantt-scroll">
         <div class="gantt-inner" id="ganttInner">
@@ -413,7 +417,7 @@
     </div>
 
     <div class="dash-section card" style="padding:20px 22px;">
-      <div class="section-title-bar">Delivery Progress — Outstanding &amp; At Risk</div>
+      <div class="section-title-bar">Feed Progress — Outstanding &amp; At Risk</div>
       <div class="progress-list" id="progressList"></div>
       <button type="button" class="completed-toggle" id="toggleCompletedBtn" style="display:none;"></button>
       <div class="progress-list" id="completedList"></div>
@@ -621,6 +625,11 @@ function getJobBucket(job){
   if(isJobArchived(job)) return 'archived';
   if(isJobActive(job)) return 'active';
   return 'planned';
+}
+function isJobAtRisk(job){
+  if(isJobArchived(job)) return false;
+  const todayISO = new Date().toISOString().slice(0,10);
+  return !!job.style_delivery_date && job.style_delivery_date < todayISO;
 }
 function jobMatchesView(job, mode){
   return getJobBucket(job) === mode;
@@ -1035,7 +1044,7 @@ function renderHero(scoped, total, late){
   const totalBalance = scoped.reduce((s,j)=> s + (j.balance_laundry||0)+(j.balance_production||0)+(j.balance_spraying||0)+(j.balance_manual||0)+(j.balance_laser||0)+(j.balance_finishing||0), 0);
 
   document.getElementById('heroDate').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long', year:'numeric'}).toUpperCase();
-  document.getElementById('heroTitle').textContent = `${total} ${modeLabel} Job Card${total===1?'':'s'} · ${avgProgress}% Avg Delivery Progress`;
+  document.getElementById('heroTitle').textContent = `${total} ${modeLabel} Job Card${total===1?'':'s'} · ${avgProgress}% Avg Feed Progress`;
   document.getElementById('heroSub').textContent = `${inProgress} in progress · ${complete} complete · ${late} late`;
   document.getElementById('heroChips').innerHTML = `
     <div class="hero-chip"><div class="chip-lbl">Late</div><div class="chip-val">${late} job${late===1?'':'s'} past delivery date</div></div>
@@ -1103,9 +1112,11 @@ function renderGantt(scoped){
         <div class="bar-complete-marker" style="left:${compEnd}%;" title="Complete: ${j.complete_date}"></div>`;
     }
 
+    const atRisk = isJobAtRisk(j);
+
     return `
-      <div class="gantt-row">
-        <div class="gantt-row-label"><b>${escAttr(j.style_number)}</b><span>${escAttr(j.cmt_name)}</span></div>
+      <div class="gantt-row ${atRisk ? 'at-risk' : ''}">
+        <div class="gantt-row-label"><b>${escAttr(j.style_number)}${atRisk ? ' <span class="risk-flag" title="At risk — past delivery date, not yet fully despatched">⚠</span>' : ''}</b><span>${escAttr(j.cmt_name)}</span></div>
         <div class="gantt-track">
           ${gridHtml}
           <div class="gantt-today" style="left:${todayPct}%"></div>
