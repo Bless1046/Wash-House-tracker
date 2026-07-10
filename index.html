@@ -71,6 +71,20 @@
   .brand h1{margin:0; font-size:19px; color:#fff; letter-spacing:.04em;}
   .brand .sub{font-size:11px; color:#d9b8e3; text-transform:uppercase; letter-spacing:.12em; margin-top:2px;}
   .status-pill{background:rgba(255,255,255,.15); padding:5px 12px; border-radius:20px; font-size:11px; font-weight:600; letter-spacing:.03em;}
+  .admin-btn{background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25); color:#fff; padding:6px 14px; border-radius:20px; font-size:11px; font-weight:600; letter-spacing:.03em; cursor:pointer; font-family:'Inter',sans-serif;}
+  .admin-btn:hover{background:rgba(255,255,255,.22);}
+  .pin-input{width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:7px; font-size:20px; letter-spacing:.3em; text-align:center; font-family:'JetBrains Mono',monospace; background:var(--chambray);}
+  .pin-error{color:var(--hard-red); font-size:12px; margin-top:8px; text-align:center; display:none;}
+  .pin-error.show{display:block;}
+  .deleted-list{display:flex; flex-direction:column; gap:10px;}
+  .deleted-row{display:grid; grid-template-columns:1fr auto; gap:14px; align-items:center; padding:12px 14px; background:var(--chambray); border-radius:8px;}
+  .deleted-row .info b{display:block; color:var(--navy); font-family:'Oswald',sans-serif; font-size:13px;}
+  .deleted-row .info span{color:var(--muted); font-size:11px;}
+  .deleted-row .actions{display:flex; gap:8px;}
+  .btn-restore{background:var(--ok); color:#fff;}
+  .btn-restore:hover{background:#3d7534;}
+  .btn-purge{background:var(--hard-red); color:#fff;}
+  .btn-purge:hover{background:#8f2e19;}
   .status-pill.ok{background:rgba(141,198,63,.28); color:#e9f6d6;}
   .status-pill.warn{background:rgba(217,119,6,.3); color:#ffe6c0;}
 
@@ -303,7 +317,10 @@
         <div class="sub">Prestige Clothing · Laundry Ops</div>
       </div>
     </div>
-    <span class="status-pill" id="dbStatusPill">Checking DB…</span>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button type="button" class="admin-btn" id="openAdminBtn">🔒 Admin</button>
+      <span class="status-pill" id="dbStatusPill">Checking DB…</span>
+    </div>
   </div>
   <nav class="tabbar">
     <button class="tab-link active" data-tab="jobcard">Job Card</button>
@@ -615,6 +632,40 @@
   </div>
 </div>
 
+<!-- Admin PIN gate -->
+<div class="modal-overlay" id="adminPinModal">
+  <div class="modal-box" style="max-width:340px;">
+    <div class="modal-header">
+      <span>Admin Access</span>
+      <button type="button" id="closeAdminPinBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">Enter the admin PIN to review deleted job cards.</p>
+      <input type="password" inputmode="numeric" maxlength="6" class="pin-input" id="adminPinInput" placeholder="••••">
+      <div class="pin-error" id="adminPinError">Incorrect PIN. Try again.</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="submitAdminPinBtn" style="width:100%;">Unlock</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Admin: Deleted Items holding area -->
+<div class="modal-overlay" id="adminPanelModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>Deleted Items — Admin Review</span>
+      <button type="button" id="closeAdminPanelBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-hint">Job cards deleted from the main view land here first. Restore puts them back exactly as they were; Permanently Delete removes them for good and can't be undone.</p>
+      <div class="deleted-list" id="deletedList">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ======================================================================
    CONFIG — fill these in with your Supabase project details, then run
@@ -623,8 +674,16 @@
 const SUPABASE_URL = "https://eillmgvqgaqksfsdbzez.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpbGxtZ3ZxZ2Fxa3Nmc2RiemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1ODM0MjEsImV4cCI6MjA5OTE1OTQyMX0.Z_HKqT7NBYTpM_OLyEvJPlUPGUBzbbI-JA2Wa6F0Ybg";
 
+// Admin PIN for reviewing/restoring/purging deleted job cards.
+// NOTE: this is a soft deterrent, not real security — it's checked in the
+// browser, so anyone who reads the page source can find it. It stops
+// accidental clicks and casual snooping, not a determined person. If you
+// need real access control, that has to happen via Supabase auth + RLS.
+const ADMIN_PIN = "2026";
+
 let supa = null;
 let jobs = [];
+let locallyDeletedJobs = []; // only used when Supabase isn't configured (no-DB fallback mode)
 
 // Full default shape for a job — used to backfill local (no-Supabase) inserts
 // so partial import formats (like Planned Jobs) don't leave fields undefined.
@@ -922,16 +981,20 @@ document.getElementById('jobForm').addEventListener('submit', async (e)=>{
 });
 
 async function deleteJob(id){
-  if(!confirm('Delete this job card? This cannot be undone.')) return;
+  if(!confirm('Move this job card to Deleted Items? An admin can restore it or permanently delete it from there.')) return;
   try{
+    const deleted_at = new Date().toISOString();
     if(supa){
-      const {error} = await supa.from('wash_jobs').delete().eq('id', id);
+      const {error} = await supa.from('wash_jobs').update({deleted_at}).eq('id', id);
       if(error) throw error;
+    } else {
+      const idx = jobs.findIndex(j=>j.id === id);
+      if(idx > -1) locallyDeletedJobs.push({...jobs[idx], deleted_at});
     }
     jobs = jobs.filter(j=>j.id !== id);
     renderJobsTable();
     populateProcessFilter();
-    toast('Job card deleted.');
+    toast('Moved to Deleted Items.');
   }catch(err){
     console.error(err);
     toast('Delete failed: ' + (err.message || err), true);
@@ -953,7 +1016,7 @@ function editJob(id){
 async function loadJobs(){
   if(!supa) return;
   try{
-    const {data, error} = await supa.from('wash_jobs').select('*').order('created_at', {ascending:false});
+    const {data, error} = await supa.from('wash_jobs').select('*').is('deleted_at', null).order('created_at', {ascending:false});
     if(error) throw error;
     jobs = data || [];
     renderJobsTable();
@@ -1714,6 +1777,121 @@ async function commitImport(){
     console.error(err);
     toast('Import failed: ' + (err.message || err), true);
     if(btn){ btn.disabled = false; btn.textContent = 'Import / Update Job Cards'; }
+  }
+}
+
+/* ---------------- Admin: Deleted Items ---------------- */
+function openAdminPinModal(){
+  document.getElementById('adminPinError').classList.remove('show');
+  document.getElementById('adminPinInput').value = '';
+  document.getElementById('adminPinModal').classList.add('show');
+  setTimeout(()=>document.getElementById('adminPinInput').focus(), 50);
+}
+function closeAdminPinModal(){
+  document.getElementById('adminPinModal').classList.remove('show');
+}
+function checkAdminPin(){
+  const val = document.getElementById('adminPinInput').value.trim();
+  if(val === ADMIN_PIN){
+    closeAdminPinModal();
+    openAdminPanel();
+  } else {
+    document.getElementById('adminPinError').classList.add('show');
+  }
+}
+document.getElementById('openAdminBtn').addEventListener('click', openAdminPinModal);
+document.getElementById('closeAdminPinBtn').addEventListener('click', closeAdminPinModal);
+document.getElementById('submitAdminPinBtn').addEventListener('click', checkAdminPin);
+document.getElementById('adminPinInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') checkAdminPin(); });
+document.getElementById('adminPinModal').addEventListener('click', (e)=>{ if(e.target.id === 'adminPinModal') closeAdminPinModal(); });
+
+function openAdminPanel(){
+  document.getElementById('adminPanelModal').classList.add('show');
+  loadDeletedJobs();
+}
+function closeAdminPanel(){
+  document.getElementById('adminPanelModal').classList.remove('show');
+}
+document.getElementById('closeAdminPanelBtn').addEventListener('click', closeAdminPanel);
+document.getElementById('adminPanelModal').addEventListener('click', (e)=>{ if(e.target.id === 'adminPanelModal') closeAdminPanel(); });
+
+async function loadDeletedJobs(){
+  const el = document.getElementById('deletedList');
+  el.innerHTML = '<div class="empty-state">Loading…</div>';
+  try{
+    let deleted;
+    if(supa){
+      const {data, error} = await supa.from('wash_jobs').select('*').not('deleted_at', 'is', null).order('deleted_at', {ascending:false});
+      if(error) throw error;
+      deleted = data || [];
+    } else {
+      deleted = locallyDeletedJobs;
+    }
+    renderDeletedList(deleted);
+  }catch(err){
+    console.error(err);
+    el.innerHTML = `<div class="empty-state">Could not load deleted items: ${escAttr(err.message || err)}</div>`;
+  }
+}
+
+function renderDeletedList(deleted){
+  const el = document.getElementById('deletedList');
+  if(deleted.length === 0){
+    el.innerHTML = '<div class="empty-state">Nothing in Deleted Items.</div>';
+    return;
+  }
+  el.innerHTML = deleted.map(j=>{
+    const when = j.deleted_at ? new Date(j.deleted_at).toLocaleString('en-GB',{day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '—';
+    return `
+    <div class="deleted-row">
+      <div class="info">
+        <b>${escAttr(j.style_number)} · ${escAttr(j.cmt_name)}</b>
+        <span>Order # ${escAttr(j.order_number)} · Deleted ${when}</span>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-sm btn-restore" onclick="restoreJob('${j.id}')">Restore</button>
+        <button type="button" class="btn btn-sm btn-purge" onclick="purgeJob('${j.id}')">Permanently Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function restoreJob(id){
+  try{
+    if(supa){
+      const {error} = await supa.from('wash_jobs').update({deleted_at:null}).eq('id', id);
+      if(error) throw error;
+    } else {
+      const idx = locallyDeletedJobs.findIndex(j=>j.id === id);
+      if(idx > -1){
+        const [restored] = locallyDeletedJobs.splice(idx,1);
+        delete restored.deleted_at;
+        jobs.unshift(restored);
+      }
+    }
+    toast('Job card restored.');
+    loadDeletedJobs();
+    if(supa) loadJobs(); else { renderJobsTable(); populateProcessFilter(); }
+  }catch(err){
+    console.error(err);
+    toast('Restore failed: ' + (err.message || err), true);
+  }
+}
+
+async function purgeJob(id){
+  if(!confirm('Permanently delete this job card? This cannot be undone.')) return;
+  try{
+    if(supa){
+      const {error} = await supa.from('wash_jobs').delete().eq('id', id);
+      if(error) throw error;
+    } else {
+      locallyDeletedJobs = locallyDeletedJobs.filter(j=>j.id !== id);
+    }
+    toast('Permanently deleted.');
+    loadDeletedJobs();
+  }catch(err){
+    console.error(err);
+    toast('Delete failed: ' + (err.message || err), true);
   }
 }
 
