@@ -679,7 +679,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // browser, so anyone who reads the page source can find it. It stops
 // accidental clicks and casual snooping, not a determined person. If you
 // need real access control, that has to happen via Supabase auth + RLS.
-const ADMIN_PIN = "1258";
+const ADMIN_PIN = "2026";
 
 let supa = null;
 let jobs = [];
@@ -708,8 +708,7 @@ function isJobArchived(job){
 }
 function isJobActive(job){
   if(isJobArchived(job)) return false;
-  const todayISO = new Date().toISOString().slice(0,10);
-  return !!job.start_date && job.start_date <= todayISO;
+  return (job.units_received || 0) > 0;
 }
 function getJobBucket(job){
   if(isJobArchived(job)) return 'archived';
