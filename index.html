@@ -253,6 +253,7 @@
   .bar-actual.late{background:repeating-linear-gradient(45deg, var(--hard-red), var(--hard-red) 4px, #8f2e19 4px, #8f2e19 8px);}
   .bar-complete-line{position:absolute; top:35px; height:2px; background:var(--lime); border-radius:2px;}
   .bar-complete-marker{position:absolute; top:31px; width:9px; height:9px; border-radius:50%; background:var(--lime); border:2px solid #fff; box-shadow:0 0 0 1px var(--lime); transform:translateX(-4.5px);}
+  .bar-progress-fill{position:absolute; top:6px; height:9px; border-radius:5px 0 0 5px; background:rgba(31,56,100,.55);}
 
   .charts-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px;}
   .bd-list{display:flex; flex-direction:column; gap:14px;}
@@ -425,7 +426,7 @@
     </div>
 
     <div class="dash-section card" style="padding:20px 22px;">
-      <div class="section-title-bar">Gantt — Planned / Despatch / Complete</div>
+      <div class="section-title-bar">Gantt — Planned / Progress / Despatch / Complete</div>
       <div class="gantt-legend">
         <span class="legend-swatch"><span class="sw" style="background:var(--metric-easy);"></span> Easy</span>
         <span class="legend-swatch"><span class="sw" style="background:var(--metric-medium);"></span> Medium</span>
@@ -434,6 +435,7 @@
         <span class="legend-swatch"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--denim),var(--denim) 3px,var(--denim-dark) 3px,var(--denim-dark) 6px);"></span> Actual (Start → Despatch)</span>
         <span class="legend-swatch"><span class="sw" style="background:repeating-linear-gradient(45deg,var(--hard-red),var(--hard-red) 3px,#8f2e19 3px,#8f2e19 6px);"></span> Despatched late</span>
         <span class="legend-swatch"><span class="sw line" style="background:var(--lime);"></span> Complete (Start → Complete)</span>
+        <span class="legend-swatch"><span class="sw" style="background:rgba(31,56,100,.55);"></span> Progress (Active jobs only)</span>
         <span class="legend-swatch"><span class="risk-flag">⚠</span> At Risk — past delivery date, still outstanding</span>
       </div>
       <div class="gantt-scroll">
@@ -1217,6 +1219,17 @@ function renderGantt(scoped){
     }
 
     const atRisk = isJobAtRisk(j);
+    const bucket = getJobBucket(j);
+
+    let progressFill = '';
+    if(bucket === 'active'){
+      const plannedQty = j.planned_units || 0;
+      const progressPct = plannedQty > 0
+        ? Math.min(100, ((j.units_received||0) + (j.units_despatched||0)) / (2*plannedQty) * 100)
+        : 0;
+      const fillWidth = planWidth * (progressPct/100);
+      progressFill = `<div class="bar-progress-fill" style="left:${planStart}%; width:${fillWidth}%;" title="${Math.round(progressPct)}% through start-to-finish (received ${j.units_received||0}, despatched ${j.units_despatched||0} of ${plannedQty} planned)"></div>`;
+    }
 
     return `
       <div class="gantt-row ${atRisk ? 'at-risk' : ''}">
@@ -1225,6 +1238,7 @@ function renderGantt(scoped){
           ${gridHtml}
           <div class="gantt-today" style="left:${todayPct}%"></div>
           <div class="bar bar-plan ${metricClass}" style="left:${planStart}%; width:${planWidth}%;" title="Planned: ${j.start_date} → ${j.style_delivery_date||'—'}"></div>
+          ${progressFill}
           ${actualBar}
           ${completeLine}
         </div>
