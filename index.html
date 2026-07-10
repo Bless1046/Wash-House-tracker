@@ -236,6 +236,7 @@
   .gantt-row.at-risk{background:rgba(179,69,44,.07); box-shadow:inset 3px 0 0 var(--hard-red);}
   .gantt-row.at-risk .gantt-row-label{background:#fbe8e3;}
   .risk-flag{color:var(--hard-red); font-size:12px;}
+  .inferred-flag{font-size:10px; opacity:.7;}
   .gantt-row-label{position:sticky; left:0; width:190px; min-width:190px; background:#fff; z-index:2; font-size:12px; padding-right:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .gantt-row-label b{display:block; color:var(--navy); font-size:12.5px;}
   .gantt-row-label span{color:var(--muted); font-size:10.5px;}
@@ -681,7 +682,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // browser, so anyone who reads the page source can find it. It stops
 // accidental clicks and casual snooping, not a determined person. If you
 // need real access control, that has to happen via Supabase auth + RLS.
-const ADMIN_PIN = "2026";
+const ADMIN_PIN = "1258";
 
 let supa = null;
 let jobs = [];
@@ -721,6 +722,16 @@ function isJobAtRisk(job){
   if(isJobArchived(job)) return false;
   const todayISO = new Date().toISOString().slice(0,10);
   return !!job.style_delivery_date && job.style_delivery_date < todayISO;
+}
+function getFirstDropDate(job){
+  if(!job.drops || !job.drops.length) return null;
+  const dates = job.drops.map(d=>d.date).filter(Boolean).sort();
+  return dates.length ? dates[0] : null;
+}
+// If Start Date wasn't recorded, the first drop received is treated as the
+// real start of the process — that's the moment work actually began.
+function getEffectiveStartDate(job){
+  return job.start_date || getFirstDropDate(job);
 }
 function jobMatchesView(job, mode){
   return getJobBucket(job) === mode;
@@ -1160,15 +1171,15 @@ function renderHero(scoped, total, late){
 
 function renderGantt(scoped){
   const inner = document.getElementById('ganttInner');
-  const rows = scoped.filter(j=>j.start_date && (j.style_delivery_date || j.despatch_date || j.complete_date));
+  const rows = scoped.filter(j=>getEffectiveStartDate(j) && (j.style_delivery_date || j.despatch_date || j.complete_date));
   if(rows.length === 0){
-    inner.innerHTML = '<div class="empty-state" id="ganttEmpty"><div class="big">📅</div>Add job cards with a start date to see the timeline.</div>';
+    inner.innerHTML = '<div class="empty-state" id="ganttEmpty"><div class="big">📅</div>Add job cards with a start date (or a first drop) to see the timeline.</div>';
     return;
   }
 
   const allDates = [];
   rows.forEach(j=>{
-    allDates.push(new Date(j.start_date));
+    allDates.push(new Date(getEffectiveStartDate(j)));
     if(j.style_delivery_date) allDates.push(new Date(j.style_delivery_date));
     if(j.despatch_date) allDates.push(new Date(j.despatch_date));
     if(j.complete_date) allDates.push(new Date(j.complete_date));
@@ -1196,7 +1207,9 @@ function renderGantt(scoped){
   const todayPct = pct(new Date());
 
   const rowsHtml = rows.map(j=>{
-    const planStart = pct(j.start_date);
+    const effectiveStart = getEffectiveStartDate(j);
+    const startIsInferred = !j.start_date && !!getFirstDropDate(j);
+    const planStart = pct(effectiveStart);
     const planEnd = j.style_delivery_date ? pct(j.style_delivery_date) : planStart;
     const planWidth = Math.max(planEnd - planStart, 0.5);
     const metricClass = 'wm-' + (j.wash_metric || 'Medium').toLowerCase().replace(' ','');
@@ -1206,7 +1219,7 @@ function renderGantt(scoped){
       const actEnd = pct(j.despatch_date);
       const actWidth = Math.max(actEnd - planStart, 0.5);
       const isLate = j.style_delivery_date && j.despatch_date > j.style_delivery_date;
-      actualBar = `<div class="bar bar-actual ${isLate?'late':''}" style="left:${planStart}%; width:${actWidth}%;" title="Actual: ${j.start_date} → ${j.despatch_date}${isLate?' (LATE)':''}"></div>`;
+      actualBar = `<div class="bar bar-actual ${isLate?'late':''}" style="left:${planStart}%; width:${actWidth}%;" title="Actual: ${effectiveStart} → ${j.despatch_date}${isLate?' (LATE)':''}"></div>`;
     }
 
     let completeLine = '';
@@ -1233,11 +1246,11 @@ function renderGantt(scoped){
 
     return `
       <div class="gantt-row ${atRisk ? 'at-risk' : ''}">
-        <div class="gantt-row-label"><b>${escAttr(j.style_number)}${atRisk ? ' <span class="risk-flag" title="At risk — past delivery date, not yet fully despatched">⚠</span>' : ''}</b><span>${escAttr(j.cmt_name)}</span></div>
+        <div class="gantt-row-label"><b>${escAttr(j.style_number)}${atRisk ? ' <span class="risk-flag" title="At risk — past delivery date, not yet fully despatched">⚠</span>' : ''}</b><span>${escAttr(j.cmt_name)}${startIsInferred ? ' <span class="inferred-flag" title="No Start Date set — using first drop date instead">🕓</span>' : ''}</span></div>
         <div class="gantt-track">
           ${gridHtml}
           <div class="gantt-today" style="left:${todayPct}%"></div>
-          <div class="bar bar-plan ${metricClass}" style="left:${planStart}%; width:${planWidth}%;" title="Planned: ${j.start_date} → ${j.style_delivery_date||'—'}"></div>
+          <div class="bar bar-plan ${metricClass}" style="left:${planStart}%; width:${planWidth}%;" title="Planned: ${effectiveStart}${startIsInferred?' (from 1st drop)':''} → ${j.style_delivery_date||'—'}"></div>
           ${progressFill}
           ${actualBar}
           ${completeLine}
