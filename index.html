@@ -155,6 +155,10 @@
   .table-toolbar{display:flex; gap:10px; margin-bottom:14px; align-items:center; flex-wrap:wrap;}
   .table-toolbar input[type=text]{max-width:220px;}
   .table-toolbar select{max-width:170px;}
+  .view-toggle{display:inline-flex; background:var(--chambray); border-radius:8px; padding:3px; gap:2px;}
+  .view-toggle button{border:none; background:transparent; padding:7px 16px; border-radius:6px; font-family:'Oswald',sans-serif; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); cursor:pointer; transition:.15s;}
+  .view-toggle button.active{background:var(--purple-deep); color:#fff; font-weight:600;}
+  .view-toggle button:not(.active):hover{color:var(--purple-deep);}
   .table-wrap{overflow-x:auto; border-radius:0 0 var(--radius) var(--radius);}
   table{width:100%; border-collapse:collapse; font-size:12.5px;}
   thead th{background:var(--denim); color:#fff; text-align:left; padding:9px 10px; font-family:'Oswald',sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; position:sticky; top:0;}
@@ -315,6 +319,11 @@
         </div>
       </div>
       <div class="table-toolbar">
+        <div class="view-toggle" id="tableViewToggle">
+          <button type="button" data-mode="active" class="active">Active</button>
+          <button type="button" data-mode="planned">Planned</button>
+          <button type="button" data-mode="archived">Archived</button>
+        </div>
         <input type="text" id="searchBox" placeholder="Search CMT, style, order...">
         <select id="filterProcess"><option value="">All Processes</option></select>
         <select id="filterMetric">
@@ -350,8 +359,16 @@
       <div class="hero-chips" id="heroChips"></div>
     </div>
 
+    <div style="display:flex; justify-content:flex-end; margin-bottom:14px;">
+      <div class="view-toggle" id="dashboardViewToggle">
+        <button type="button" data-mode="active" class="active">Active</button>
+        <button type="button" data-mode="planned">Planned</button>
+        <button type="button" data-mode="archived">Archived</button>
+      </div>
+    </div>
+
     <div class="kpi-row">
-      <div class="kpi total"><div class="num" id="kpiJobs">0</div><div class="lbl">Active Job Cards</div></div>
+      <div class="kpi total"><div class="num" id="kpiJobs">0</div><div class="lbl">Job Cards</div></div>
       <div class="kpi planned"><div class="num" id="kpiPlanned">0</div><div class="lbl">Planned Units</div></div>
       <div class="kpi received"><div class="num" id="kpiReceived">0</div><div class="lbl">Units Received</div><div class="kpi-sub" id="kpiReceivedPct"></div></div>
       <div class="kpi despatched"><div class="num" id="kpiDespatched">0</div><div class="lbl">Units Despatched</div><div class="kpi-sub" id="kpiDespatchedPct"></div></div>
@@ -586,6 +603,28 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 let supa = null;
 let jobs = [];
 let editingId = null;
+let tableViewMode = 'active';      // 'active' | 'planned' | 'archived' — Job Cards table filter
+let dashboardViewMode = 'active';  // 'active' | 'planned' | 'archived' — Dashboard filter
+
+function isJobArchived(job){
+  if(!job.despatch_date) return false;
+  const planned = job.planned_units || 0;
+  const despatched = job.units_despatched || 0;
+  return planned > 0 ? despatched >= planned : true;
+}
+function isJobActive(job){
+  if(isJobArchived(job)) return false;
+  const todayISO = new Date().toISOString().slice(0,10);
+  return !!job.start_date && job.start_date <= todayISO;
+}
+function getJobBucket(job){
+  if(isJobArchived(job)) return 'archived';
+  if(isJobActive(job)) return 'active';
+  return 'planned';
+}
+function jobMatchesView(job, mode){
+  return getJobBucket(job) === mode;
+}
 
 const METRIC_COLOR_VAR = {
   'Easy':'var(--metric-easy)', 'Medium':'var(--metric-medium)',
@@ -892,6 +931,7 @@ function filteredJobs(){
   const proc = document.getElementById('filterProcess').value;
   const metric = document.getElementById('filterMetric').value;
   return jobs.filter(j=>{
+    if(!jobMatchesView(j, tableViewMode)) return false;
     if(proc && j.process !== proc) return false;
     if(metric && j.wash_metric !== metric) return false;
     if(q){
@@ -905,9 +945,9 @@ function filteredJobs(){
 function renderJobsTable(){
   const tbody = document.getElementById('jobsTableBody');
   const list = filteredJobs();
-  document.getElementById('jobCountChip').textContent = jobs.length;
+  document.getElementById('jobCountChip').textContent = list.length;
   if(list.length === 0){
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="15">No job cards match — add one, or clear filters.</td></tr>';
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="15">No ${tableViewMode} job cards match — add one, or clear filters.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(j=>{
@@ -942,13 +982,30 @@ document.getElementById('searchBox').addEventListener('input', renderJobsTable);
 document.getElementById('filterProcess').addEventListener('change', renderJobsTable);
 document.getElementById('filterMetric').addEventListener('change', renderJobsTable);
 
+document.getElementById('tableViewToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-mode]');
+  if(!btn) return;
+  tableViewMode = btn.dataset.mode;
+  document.querySelectorAll('#tableViewToggle button').forEach(b=>b.classList.toggle('active', b === btn));
+  renderJobsTable();
+});
+
+document.getElementById('dashboardViewToggle').addEventListener('click', (e)=>{
+  const btn = e.target.closest('button[data-mode]');
+  if(!btn) return;
+  dashboardViewMode = btn.dataset.mode;
+  document.querySelectorAll('#dashboardViewToggle button').forEach(b=>b.classList.toggle('active', b === btn));
+  renderDashboard();
+});
+
 /* ---------------- Dashboard ---------------- */
 function renderDashboard(){
-  const total = jobs.length;
-  const planned = jobs.reduce((s,j)=>s + (j.planned_units||0), 0);
-  const received = jobs.reduce((s,j)=>s + (j.units_received||0), 0);
-  const despatched = jobs.reduce((s,j)=>s + (j.units_despatched||0), 0);
-  const late = jobs.filter(j=>j.despatch_date && j.style_delivery_date && j.despatch_date > j.style_delivery_date).length;
+  const scoped = jobs.filter(j=>jobMatchesView(j, dashboardViewMode));
+  const total = scoped.length;
+  const planned = scoped.reduce((s,j)=>s + (j.planned_units||0), 0);
+  const received = scoped.reduce((s,j)=>s + (j.units_received||0), 0);
+  const despatched = scoped.reduce((s,j)=>s + (j.units_despatched||0), 0);
+  const late = scoped.filter(j=>j.despatch_date && j.style_delivery_date && j.despatch_date > j.style_delivery_date).length;
 
   document.getElementById('kpiJobs').textContent = total;
   document.getElementById('kpiPlanned').textContent = planned.toLocaleString();
@@ -958,26 +1015,27 @@ function renderDashboard(){
   document.getElementById('kpiReceivedPct').textContent = planned > 0 ? `${Math.round(received/planned*100)}% of planned` : '';
   document.getElementById('kpiDespatchedPct').textContent = planned > 0 ? `${Math.round(despatched/planned*100)}% of planned` : '';
 
-  renderHero(total, late);
-  renderGantt();
-  renderProgressList();
-  renderBalanceChart();
-  renderStatusChart();
-  renderMetricChart();
-  renderLeadTimeChart();
+  renderHero(scoped, total, late);
+  renderGantt(scoped);
+  renderProgressList(scoped);
+  renderBalanceChart(scoped);
+  renderStatusChart(scoped);
+  renderMetricChart(scoped);
+  renderLeadTimeChart(scoped);
 }
 
-function renderHero(total, late){
-  const avgProgress = total ? Math.round(jobs.reduce((s,j)=>{
+function renderHero(scoped, total, late){
+  const modeLabel = dashboardViewMode === 'active' ? 'Active' : (dashboardViewMode === 'archived' ? 'Archived' : 'Planned');
+  const avgProgress = total ? Math.round(scoped.reduce((s,j)=>{
     const p = j.planned_units||0, r = j.units_received||0;
     return s + (p>0 ? Math.min(100, r/p*100) : 0);
   },0) / total) : 0;
-  const complete = jobs.filter(j=>j.complete_date).length;
+  const complete = scoped.filter(j=>j.complete_date).length;
   const inProgress = total - complete;
-  const totalBalance = jobs.reduce((s,j)=> s + (j.balance_laundry||0)+(j.balance_production||0)+(j.balance_spraying||0)+(j.balance_manual||0)+(j.balance_laser||0)+(j.balance_finishing||0), 0);
+  const totalBalance = scoped.reduce((s,j)=> s + (j.balance_laundry||0)+(j.balance_production||0)+(j.balance_spraying||0)+(j.balance_manual||0)+(j.balance_laser||0)+(j.balance_finishing||0), 0);
 
   document.getElementById('heroDate').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long', year:'numeric'}).toUpperCase();
-  document.getElementById('heroTitle').textContent = `${total} Job Card${total===1?'':'s'} · ${avgProgress}% Avg Delivery Progress`;
+  document.getElementById('heroTitle').textContent = `${total} ${modeLabel} Job Card${total===1?'':'s'} · ${avgProgress}% Avg Delivery Progress`;
   document.getElementById('heroSub').textContent = `${inProgress} in progress · ${complete} complete · ${late} late`;
   document.getElementById('heroChips').innerHTML = `
     <div class="hero-chip"><div class="chip-lbl">Late</div><div class="chip-val">${late} job${late===1?'':'s'} past delivery date</div></div>
@@ -985,9 +1043,9 @@ function renderHero(total, late){
   `;
 }
 
-function renderGantt(){
+function renderGantt(scoped){
   const inner = document.getElementById('ganttInner');
-  const rows = jobs.filter(j=>j.start_date && (j.style_delivery_date || j.despatch_date || j.complete_date));
+  const rows = scoped.filter(j=>j.start_date && (j.style_delivery_date || j.despatch_date || j.complete_date));
   if(rows.length === 0){
     inner.innerHTML = '<div class="empty-state" id="ganttEmpty"><div class="big">📅</div>Add job cards with a start date to see the timeline.</div>';
     return;
@@ -1064,11 +1122,11 @@ function renderGantt(){
   `;
 }
 
-function renderProgressList(){
+function renderProgressList(scoped){
   const el = document.getElementById('progressList');
   const completedEl = document.getElementById('completedList');
   const toggleBtn = document.getElementById('toggleCompletedBtn');
-  if(jobs.length === 0){
+  if(scoped.length === 0){
     el.innerHTML = '<div class="empty-state">No data yet.</div>';
     completedEl.innerHTML = '';
     toggleBtn.style.display = 'none';
@@ -1093,7 +1151,7 @@ function renderProgressList(){
 
   const outstanding = [];
   const completed = [];
-  jobs.forEach(j=>{
+  scoped.forEach(j=>{
     const planned = j.planned_units || 0;
     const received = j.units_received || 0;
     const pct = planned > 0 ? Math.min(100, Math.round(received/planned*100)) : 0;
@@ -1146,25 +1204,25 @@ function bdItemsHtml(entries){
   }).join('');
 }
 
-function renderBalanceChart(){
+function renderBalanceChart(scoped){
   const fields = [
     ['Laundry','balance_laundry'], ['Production','balance_production'], ['Spraying','balance_spraying'],
     ['Manual','balance_manual'], ['Laser','balance_laser'], ['Finishing','balance_finishing']
   ];
   const el = document.getElementById('balChart');
-  if(jobs.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+  if(scoped.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
   const entries = fields.map(([label,key])=>{
     const style = DEPT_STYLE[label];
-    return {label, count: jobs.reduce((s,j)=>s+(j[key]||0),0), bg:style.bg, text:style.text, bar:style.bar};
+    return {label, count: scoped.reduce((s,j)=>s+(j[key]||0),0), bg:style.bg, text:style.text, bar:style.bar};
   });
   el.innerHTML = bdItemsHtml(entries);
 }
 
-function renderStatusChart(){
+function renderStatusChart(scoped){
   const el = document.getElementById('statusChart');
-  if(jobs.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+  if(scoped.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
   const counts = {};
-  jobs.forEach(j=>{
+  scoped.forEach(j=>{
     const s = (j.status || '').trim() || 'No Status';
     counts[s] = (counts[s]||0) + 1;
   });
@@ -1177,11 +1235,11 @@ function renderStatusChart(){
   el.innerHTML = bdItemsHtml(entries);
 }
 
-function renderMetricChart(){
+function renderMetricChart(scoped){
   const metrics = ['Easy','Medium','Hard','Very Hard'];
   const el = document.getElementById('metricChart');
-  if(jobs.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
-  const total = jobs.length;
+  if(scoped.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+  const total = scoped.length;
   const styles = {
     'Easy':{bg:'var(--metric-easy)', text:'var(--metric-easy-text)'},
     'Medium':{bg:'var(--metric-medium)', text:'var(--metric-medium-text)'},
@@ -1189,7 +1247,7 @@ function renderMetricChart(){
     'Very Hard':{bg:'var(--metric-veryhard)', text:'var(--metric-veryhard-text)'},
   };
   const entries = metrics.map(m=>{
-    const count = jobs.filter(j=>j.wash_metric===m).length;
+    const count = scoped.filter(j=>j.wash_metric===m).length;
     const pct = total > 0 ? Math.round(count/total*100) : 0;
     return {
       label:m, count, display:`${pct}%`, widthPct:pct,
@@ -1199,11 +1257,11 @@ function renderMetricChart(){
   el.innerHTML = bdItemsHtml(entries);
 }
 
-function renderLeadTimeChart(){
+function renderLeadTimeChart(scoped){
   const el = document.getElementById('leadTimeChart');
-  if(jobs.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+  if(scoped.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
   const entries = LEAD_BUCKETS.map(b=>({
-    label:b.key, count: jobs.filter(j=>b.test(j.lead_time_days)).length,
+    label:b.key, count: scoped.filter(j=>b.test(j.lead_time_days)).length,
     bg:b.bg, text:b.text, bar:b.bar
   }));
   el.innerHTML = bdItemsHtml(entries);
