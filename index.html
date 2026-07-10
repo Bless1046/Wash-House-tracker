@@ -164,6 +164,8 @@
   thead th{background:var(--denim); color:#fff; text-align:left; padding:9px 10px; font-family:'Oswald',sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; position:sticky; top:0;}
   tbody td{padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap;}
   tbody tr:hover{background:var(--chambray);}
+  tbody tr.at-risk-row{background:rgba(179,69,44,.06);}
+  tbody tr.at-risk-row:hover{background:rgba(179,69,44,.12);}
   .pill{padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;}
   .pill-easy{background:var(--metric-easy); color:var(--metric-easy-text);}
   .pill-medium{background:var(--metric-medium); color:var(--metric-medium-text);}
@@ -375,7 +377,7 @@
       <div class="kpi planned"><div class="num" id="kpiPlanned">0</div><div class="lbl">Planned Units</div></div>
       <div class="kpi received"><div class="num" id="kpiReceived">0</div><div class="lbl">Units Received</div><div class="kpi-sub" id="kpiReceivedPct"></div></div>
       <div class="kpi despatched"><div class="num" id="kpiDespatched">0</div><div class="lbl">Units Despatched</div><div class="kpi-sub" id="kpiDespatchedPct"></div></div>
-      <div class="kpi late"><div class="num" id="kpiLate">0</div><div class="lbl">Late vs. Delivery Date</div></div>
+      <div class="kpi late"><div class="num" id="kpiLate">0</div><div class="lbl">Jobs At Risk</div></div>
     </div>
 
     <div class="charts-row dash-section">
@@ -394,6 +396,10 @@
       <div class="card" style="padding:20px 22px;">
         <div class="section-title-bar">Jobs by Lead Time</div>
         <div class="bd-list" id="leadTimeChart"></div>
+      </div>
+      <div class="card" style="padding:20px 22px;">
+        <div class="section-title-bar">Jobs by CMT</div>
+        <div class="bd-list" id="cmtChart"></div>
       </div>
     </div>
 
@@ -963,10 +969,11 @@ function renderJobsTable(){
     const planned = j.planned_units || 0;
     const recvPct = planned > 0 ? Math.round((j.units_received||0)/planned*100) : null;
     const despPct = planned > 0 ? Math.round((j.units_despatched||0)/planned*100) : null;
+    const atRisk = isJobAtRisk(j);
     return `
-    <tr style="border-left:4px solid ${METRIC_COLOR_VAR[j.wash_metric] || 'var(--line)'};">
+    <tr style="border-left:4px solid ${METRIC_COLOR_VAR[j.wash_metric] || 'var(--line)'};" class="${atRisk ? 'at-risk-row' : ''}">
       <td>${escAttr(j.cmt_name)}</td>
-      <td class="mono">${escAttr(j.style_number)}</td>
+      <td class="mono">${escAttr(j.style_number)}${atRisk ? ' <span class="risk-flag" title="At risk — past delivery date, not yet fully despatched">⚠</span>' : ''}</td>
       <td class="mono">${escAttr(j.order_number)}</td>
       <td>${escAttr(j.process || '—')}</td>
       <td><span class="pill ${metricPillClass(j.wash_metric)}">${escAttr(j.wash_metric || '—')}</span></td>
@@ -1014,7 +1021,7 @@ function renderDashboard(){
   const planned = scoped.reduce((s,j)=>s + (j.planned_units||0), 0);
   const received = scoped.reduce((s,j)=>s + (j.units_received||0), 0);
   const despatched = scoped.reduce((s,j)=>s + (j.units_despatched||0), 0);
-  const late = scoped.filter(j=>j.despatch_date && j.style_delivery_date && j.despatch_date > j.style_delivery_date).length;
+  const late = scoped.filter(isJobAtRisk).length;
 
   document.getElementById('kpiJobs').textContent = total;
   document.getElementById('kpiPlanned').textContent = planned.toLocaleString();
@@ -1031,6 +1038,7 @@ function renderDashboard(){
   renderStatusChart(scoped);
   renderMetricChart(scoped);
   renderLeadTimeChart(scoped);
+  renderCmtChart(scoped);
 }
 
 function renderHero(scoped, total, late){
@@ -1143,14 +1151,13 @@ function renderProgressList(scoped){
     toggleBtn.style.display = 'none';
     return;
   }
-  const todayISO = new Date().toISOString().slice(0,10);
 
   function rowHtml(j){
     const planned = j.planned_units || 0;
     const received = j.units_received || 0;
     const pct = planned > 0 ? Math.min(100, Math.round(received/planned*100)) : 0;
     const color = METRIC_COLOR_VAR[j.wash_metric] || 'var(--denim)';
-    const atRisk = pct < 100 && j.style_delivery_date && j.style_delivery_date < todayISO;
+    const atRisk = isJobAtRisk(j);
     return `
       <div class="progress-row">
         <div class="progress-label"><b>${escAttr(j.style_number)}</b><span>${escAttr(j.cmt_name)}</span></div>
@@ -1170,11 +1177,7 @@ function renderProgressList(scoped){
   });
 
   // At-risk (late) jobs float to the top of the outstanding list.
-  outstanding.sort((a,b)=>{
-    const aRisk = a.style_delivery_date && a.style_delivery_date < todayISO ? 0 : 1;
-    const bRisk = b.style_delivery_date && b.style_delivery_date < todayISO ? 0 : 1;
-    return aRisk - bRisk;
-  });
+  outstanding.sort((a,b)=> (isJobAtRisk(a)?0:1) - (isJobAtRisk(b)?0:1));
 
   el.innerHTML = outstanding.length
     ? outstanding.map(rowHtml).join('')
@@ -1275,6 +1278,23 @@ function renderLeadTimeChart(scoped){
     label:b.key, count: scoped.filter(j=>b.test(j.lead_time_days)).length,
     bg:b.bg, text:b.text, bar:b.bar
   }));
+  el.innerHTML = bdItemsHtml(entries);
+}
+
+function renderCmtChart(scoped){
+  const el = document.getElementById('cmtChart');
+  if(scoped.length === 0){ el.innerHTML = '<div class="empty-state">No data yet.</div>'; return; }
+  const counts = {};
+  scoped.forEach(j=>{
+    const c = (j.cmt_name || '').trim() || 'Unspecified';
+    counts[c] = (counts[c]||0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  let paletteIdx = 0;
+  const entries = sorted.map(([label,count])=>{
+    const style = PROCESS_PALETTE[paletteIdx++ % PROCESS_PALETTE.length];
+    return {label, count, bg:style.bg, text:style.text, bar:style.bar};
+  });
   el.innerHTML = bdItemsHtml(entries);
 }
 
