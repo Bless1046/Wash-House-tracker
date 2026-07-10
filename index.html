@@ -160,18 +160,22 @@
   .view-toggle button.active{background:var(--purple-deep); color:#fff; font-weight:600;}
   .view-toggle button:not(.active):hover{color:var(--purple-deep);}
   .table-wrap{overflow-x:auto; border-radius:0 0 var(--radius) var(--radius);}
-  table{width:100%; border-collapse:collapse; font-size:12.5px;}
-  thead th{background:var(--denim); color:#fff; text-align:left; padding:9px 10px; font-family:'Oswald',sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; position:sticky; top:0;}
-  tbody td{padding:9px 10px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{background:var(--denim); color:#fff; text-align:left; padding:11px 12px; font-family:'Oswald',sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; position:sticky; top:0; z-index:3;}
+  tbody td{padding:11px 12px; border-bottom:1px solid var(--line); white-space:nowrap;}
   tbody tr:hover{background:var(--chambray);}
   tbody tr.at-risk-row{background:rgba(179,69,44,.06);}
   tbody tr.at-risk-row:hover{background:rgba(179,69,44,.12);}
+  thead th.actions-col, tbody td.actions-col{position:sticky; right:0; z-index:4; background:#fff; box-shadow:-3px 0 6px rgba(20,25,40,.08);}
+  tbody tr:hover td.actions-col{background:var(--chambray);}
+  tbody tr.at-risk-row td.actions-col{background:#fbe8e3;}
+  tbody tr.at-risk-row:hover td.actions-col{background:#f5d5cd;}
   .pill{padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700;}
   .pill-easy{background:var(--metric-easy); color:var(--metric-easy-text);}
   .pill-medium{background:var(--metric-medium); color:var(--metric-medium-text);}
   .pill-hard{background:var(--metric-hard); color:var(--metric-hard-text);}
   .pill-veryhard{background:var(--metric-veryhard); color:var(--metric-veryhard-text);}
-  .icon-btn{background:none; border:none; cursor:pointer; font-size:14px; padding:3px 6px; border-radius:5px; color:var(--muted);}
+  .icon-btn{background:none; border:none; cursor:pointer; font-size:17px; padding:5px 8px; border-radius:6px; color:var(--muted);}
   .icon-btn:hover{background:var(--chambray); color:var(--purple-deep);}
   .empty-row td{text-align:center; color:var(--muted); padding:30px; font-style:italic;}
 
@@ -341,12 +345,12 @@
         <table>
           <thead>
             <tr>
-              <th>CMT</th><th>Style #</th><th>Order #</th><th>PIS Month</th><th>Process</th><th>Wash</th><th>Days Wash</th>
-              <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Recv %</th><th>Despatched</th><th>Desp %</th><th>Status</th><th></th>
+              <th>CMT</th><th>Style #</th><th>Order #</th><th>PIS Month</th><th>Wash</th><th>Days Wash</th>
+              <th>Lead Time</th><th>Delivery</th><th>Planned</th><th>Received</th><th>Recv %</th><th>Despatched</th><th>Desp %</th><th>Status</th><th class="actions-col"></th>
             </tr>
           </thead>
           <tbody id="jobsTableBody">
-            <tr class="empty-row"><td colspan="16">No job cards yet — click "+ New Job Card" to add one.</td></tr>
+            <tr class="empty-row"><td colspan="15">No job cards yet — click "+ New Job Card" to add one.</td></tr>
           </tbody>
         </table>
       </div>
@@ -990,7 +994,7 @@ function renderJobsTable(){
   const list = filteredJobs();
   document.getElementById('jobCountChip').textContent = list.length;
   if(list.length === 0){
-    tbody.innerHTML = `<tr class="empty-row"><td colspan="16">No ${tableViewMode} job cards match — add one, or clear filters.</td></tr>`;
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="15">No ${tableViewMode} job cards match — add one, or clear filters.</td></tr>`;
     return;
   }
   tbody.innerHTML = list.map(j=>{
@@ -1004,7 +1008,6 @@ function renderJobsTable(){
       <td class="mono">${escAttr(j.style_number)}${atRisk ? ' <span class="risk-flag" title="At risk — past delivery date, not yet fully despatched">⚠</span>' : ''}</td>
       <td class="mono">${escAttr(j.order_number)}</td>
       <td>${escAttr(j.pis_month || '—')}</td>
-      <td>${escAttr(j.process || '—')}</td>
       <td><span class="pill ${metricPillClass(j.wash_metric)}">${escAttr(j.wash_metric || '—')}</span></td>
       <td>${j.days_in_washing ?? '—'}</td>
       <td>${j.lead_time_days ? j.lead_time_days + 'd' : '—'}</td>
@@ -1015,7 +1018,7 @@ function renderJobsTable(){
       <td>${j.units_despatched ?? 0}</td>
       <td class="mono">${despPct === null ? '—' : despPct + '%'}</td>
       <td>${escAttr(j.status || '—')}</td>
-      <td>
+      <td class="actions-col">
         <button class="icon-btn" title="Edit" onclick="editJob('${j.id}')">✏️</button>
         <button class="icon-btn" title="Delete" onclick="deleteJob('${j.id}')">🗑️</button>
       </td>
