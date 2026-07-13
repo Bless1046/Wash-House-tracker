@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Machine Labels</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --purple-deep:#67207A;
+    --purple-hero-dark:#491657;
+    --navy:#1F3864;
+    --denim:#3d5a80;
+    --chambray:#eef2f6;
+    --paper:#faf9f6;
+    --ink:#20242c;
+    --muted:#6b7280;
+    --line:#dde3ea;
+    --hard-red:#b3452c;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(20,25,40,.06), 0 4px 14px rgba(20,25,40,.05);
+  }
+  *{box-sizing:border-box;}
+  body{font-family:'Inter',system-ui,sans-serif; background:var(--paper); color:var(--ink); margin:0;}
+  h1{font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.03em; font-size:19px; margin:0;}
+
+  header{background:var(--purple-deep); color:#fff; padding:16px 24px; display:flex; justify-content:space-between; align-items:center;}
+  header .sub{font-size:11px; color:#d9b8e3; text-transform:uppercase; letter-spacing:.1em; margin-top:2px;}
+
+  main{padding:24px; max-width:1100px; margin:0 auto;}
+
+  .card{background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--line); padding:20px 22px; margin-bottom:22px;}
+  .section-title{font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:14px; color:var(--purple-deep); margin:0 0 14px;}
+
+  .add-form{display:grid; grid-template-columns:2fr 1.4fr 1fr auto; gap:10px; align-items:end;}
+  label{display:block; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:5px;}
+  input[type=text], select{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:13.5px; background:var(--chambray);}
+  input:focus, select:focus{outline:none; border-color:var(--denim); background:#fff;}
+  .btn{font-family:'Oswald',sans-serif; letter-spacing:.04em; text-transform:uppercase; border:none; border-radius:7px; padding:10px 18px; font-size:12.5px; cursor:pointer;}
+  .btn-primary{background:var(--purple-deep); color:#fff;}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--muted);}
+  .btn-danger{background:transparent; border:1px solid var(--hard-red); color:var(--hard-red);}
+
+  .machine-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px;}
+  .machine-row:last-child{border-bottom:none;}
+  .machine-row .name{font-family:'Oswald',sans-serif; font-weight:600; color:var(--navy);}
+  .machine-row .dept{color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.04em;}
+  .machine-row .slug{font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--denim);}
+
+  #printSheet{display:grid; grid-template-columns:repeat(3, 1fr); gap:18px;}
+  .label-card{
+    border:2px dashed var(--line); border-radius:10px; padding:16px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:8px; break-inside:avoid;
+  }
+  .label-card .m-label{font-family:'Oswald',sans-serif; font-weight:700; font-size:16px; color:var(--navy);}
+  .label-card .m-dept{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--purple-deep); font-weight:600;}
+  .label-card canvas{margin:6px 0;}
+  .label-card .m-slug{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);}
+
+  .empty-state{text-align:center; padding:30px; color:var(--muted); font-size:13px;}
+
+  @media print{
+    header, .card:not(#printCard), .no-print{display:none !important;}
+    body{background:#fff;}
+    main{padding:0; max-width:none;}
+    #printCard{box-shadow:none; border:none; padding:0;}
+    #printSheet{grid-template-columns:repeat(3, 1fr);}
+    .label-card{border-style:solid;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Machine Labels</h1>
+    <div class="sub">Wash House Process Tracker</div>
+  </div>
+  <button class="btn btn-primary no-print" onclick="window.print()">🖨 Print Sheet</button>
+</header>
+
+<main>
+  <div id="configWarning" class="card" style="display:none; background:#fff2d6; border-color:#e0b050; color:#7a5510;"></div>
+
+  <div class="card no-print">
+    <div class="section-title">Add a Machine</div>
+    <div class="add-form">
+      <div>
+        <label>Machine Name</label>
+        <input type="text" id="newLabel" placeholder="e.g. Washer 4">
+      </div>
+      <div>
+        <label>Department</label>
+        <select id="newDept">
+          <option>Laundry</option><option>Production</option><option>Spraying</option>
+          <option>Manual</option><option>Laser</option><option>Finishing</option>
+        </select>
+      </div>
+      <div>
+        <label>QR Code (short)</label>
+        <input type="text" id="newSlug" placeholder="e.g. W4">
+      </div>
+      <button class="btn btn-primary" id="addMachineBtn">Add</button>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <div class="section-title">Machines <span id="machineCount"></span></div>
+    <div id="machineList"><div class="empty-state">Loading…</div></div>
+  </div>
+
+  <div class="card" id="printCard">
+    <div class="section-title no-print">Printable QR Sheet — each links to this machine's scan page</div>
+    <div id="printSheet"><div class="empty-state">Loading…</div></div>
+  </div>
+</main>
+
+<script>
+const SUPABASE_URL = "https://eillmgvqgaqksfsdbzez.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpbGxtZ3ZxZ2Fxa3Nmc2RiemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1ODM0MjEsImV4cCI6MjA5OTE1OTQyMX0.Z_HKqT7NBYTpM_OLyEvJPlUPGUBzbbI-JA2Wa6F0Ybg";
+
+// Base URL that scan.html lives at — QR codes point to <SCAN_BASE_URL>?m=<slug>
+// Defaults to same folder as this page; override if you host scan.html elsewhere.
+const SCAN_BASE_URL = new URL('scan.html', window.location.href).href;
+
+let supa = null;
+let machines = [];
+
+function escAttr(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function initSupabase(){
+  if(!SUPABASE_URL || SUPABASE_URL === "YOUR_SUPABASE_URL" || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY"){
+    const w = document.getElementById('configWarning');
+    w.style.display = 'block';
+    w.textContent = '⚠️ Supabase isn\'t configured in this file yet — set SUPABASE_URL / SUPABASE_ANON_KEY at the top of the script.';
+    return false;
+  }
+  supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return true;
+}
+
+async function loadMachines(){
+  try{
+    const {data, error} = await supa.from('machines').select('*').eq('active', true).order('department').order('label');
+    if(error) throw error;
+    machines = data || [];
+    renderMachineList();
+    renderPrintSheet();
+  }catch(err){
+    console.error(err);
+    document.getElementById('machineList').innerHTML = `<div class="empty-state">Could not load machines: ${escAttr(err.message||err)}</div>`;
+  }
+}
+
+function renderMachineList(){
+  const el = document.getElementById('machineList');
+  document.getElementById('machineCount').textContent = machines.length ? `(${machines.length})` : '';
+  if(machines.length === 0){
+    el.innerHTML = '<div class="empty-state">No machines yet — add one above.</div>';
+    return;
+  }
+  el.innerHTML = machines.map(m=>`
+    <div class="machine-row">
+      <div><span class="name">${escAttr(m.label)}</span> &nbsp; <span class="dept">${escAttr(m.department)}</span> &nbsp; <span class="slug">${escAttr(m.qr_slug)}</span></div>
+      <button class="btn btn-danger no-print" onclick="deactivateMachine('${m.id}')">Remove</button>
+    </div>
+  `).join('');
+}
+
+function renderPrintSheet(){
+  const el = document.getElementById('printSheet');
+  if(machines.length === 0){
+    el.innerHTML = '<div class="empty-state">Add machines above to generate labels.</div>';
+    return;
+  }
+  el.innerHTML = machines.map(m=>`
+    <div class="label-card">
+      <div class="m-label">${escAttr(m.label)}</div>
+      <div class="m-dept">${escAttr(m.department)}</div>
+      <canvas id="qr-${escAttr(m.id)}"></canvas>
+      <div class="m-slug">${escAttr(m.qr_slug)}</div>
+    </div>
+  `).join('');
+  machines.forEach(m=>{
+    const url = `${SCAN_BASE_URL}?m=${encodeURIComponent(m.qr_slug)}`;
+    const canvas = document.getElementById('qr-'+m.id);
+    if(canvas && window.QRCode){
+      QRCode.toCanvas(canvas, url, {width:130, margin:1}, (err)=>{ if(err) console.error(err); });
+    }
+  });
+}
+
+document.getElementById('addMachineBtn').addEventListener('click', async ()=>{
+  const label = document.getElementById('newLabel').value.trim();
+  const department = document.getElementById('newDept').value;
+  const qr_slug = document.getElementById('newSlug').value.trim();
+  if(!label || !qr_slug){ alert('Enter a machine name and a QR code.'); return; }
+  try{
+    const {error} = await supa.from('machines').insert({label, department, qr_slug});
+    if(error) throw error;
+    document.getElementById('newLabel').value = '';
+    document.getElementById('newSlug').value = '';
+    loadMachines();
+  }catch(err){
+    console.error(err);
+    alert('Could not add machine: ' + (err.message || err));
+  }
+});
+
+async function deactivateMachine(id){
+  if(!confirm('Remove this machine? It will stop appearing here and its QR code will no longer work.')) return;
+  try{
+    const {error} = await supa.from('machines').update({active:false}).eq('id', id);
+    if(error) throw error;
+    loadMachines();
+  }catch(err){
+    console.error(err);
+    alert('Could not remove machine: ' + (err.message || err));
+  }
+}
+
+if(initSupabase()) loadMachines();
+</script>
+</body>
+</html>
