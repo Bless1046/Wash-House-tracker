@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Machine Scan</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --purple-deep:#67207A;
+    --purple-hero-dark:#491657;
+    --lime:#8dc63f;
+    --navy:#1F3864;
+    --denim:#3d5a80;
+    --denim-dark:#2b4160;
+    --chambray:#eef2f6;
+    --paper:#faf9f6;
+    --ink:#20242c;
+    --muted:#6b7280;
+    --line:#dde3ea;
+    --ok:#4a8c3f;
+    --hard-red:#b3452c;
+    --radius:12px;
+    --shadow:0 2px 10px rgba(20,25,40,.08);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  h1,h2,.label-font{font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:.03em;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  header{
+    background:linear-gradient(135deg,var(--purple-deep),var(--purple-hero-dark));
+    color:#fff; padding:18px 20px; text-align:center;
+  }
+  header .machine-label{font-family:'Oswald',sans-serif; font-size:20px; font-weight:600; margin:0;}
+  header .machine-dept{font-size:12px; opacity:.8; text-transform:uppercase; letter-spacing:.08em; margin-top:2px;}
+
+  main{padding:16px; max-width:480px; margin:0 auto;}
+
+  .card{background:#fff; border-radius:var(--radius); box-shadow:var(--shadow); border:1px solid var(--line); padding:18px; margin-bottom:14px;}
+  .empty-state{text-align:center; padding:40px 20px; color:var(--muted);}
+  .empty-state .big{font-size:38px; margin-bottom:10px;}
+
+  label{display:block; font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;}
+  input[type=text], input[type=number], select{
+    width:100%; padding:13px 14px; border:1px solid var(--line); border-radius:9px;
+    font-size:16px; font-family:'Inter',sans-serif; background:var(--chambray); margin-bottom:14px;
+  }
+  input:focus, select:focus{outline:none; border-color:var(--denim); background:#fff;}
+
+  .btn{
+    width:100%; font-family:'Oswald',sans-serif; letter-spacing:.04em; text-transform:uppercase;
+    border:none; border-radius:9px; padding:15px 20px; font-size:15px; cursor:pointer; margin-bottom:10px;
+  }
+  .btn-primary{background:var(--purple-deep); color:#fff;}
+  .btn-complete{background:var(--ok); color:#fff;}
+  .btn-cancel{background:transparent; color:var(--hard-red); border:1.5px solid var(--hard-red);}
+  .btn-ghost{background:transparent; color:var(--muted); border:1.5px solid var(--line);}
+  .btn:disabled{opacity:.5;}
+
+  .job-result{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:12px 14px; border:1.5px solid var(--line); border-radius:9px; margin-bottom:8px; cursor:pointer;
+  }
+  .job-result:active{background:var(--chambray);}
+  .job-result.selected{border-color:var(--purple-deep); background:#f5ecf7;}
+  .job-result .info b{display:block; color:var(--navy); font-family:'Oswald',sans-serif; font-size:14px;}
+  .job-result .info span{color:var(--muted); font-size:11.5px;}
+  .job-result .bal{font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--denim-dark); white-space:nowrap;}
+
+  .running-hero{text-align:center; padding:10px 0 16px;}
+  .running-hero .qty{font-family:'Oswald',sans-serif; font-size:44px; font-weight:700; color:var(--navy);}
+  .running-hero .job-name{font-size:15px; color:var(--ink); margin-top:2px; font-weight:600;}
+  .running-hero .job-sub{font-size:12.5px; color:var(--muted); margin-top:2px;}
+  .running-hero .elapsed{margin-top:10px; font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
+
+  .toast{
+    position:fixed; bottom:20px; left:16px; right:16px; background:var(--navy); color:#fff;
+    padding:13px 18px; border-radius:9px; font-size:14px; box-shadow:var(--shadow);
+    opacity:0; transform:translateY(10px); transition:.25s; pointer-events:none; z-index:99; text-align:center;
+  }
+  .toast.show{opacity:1; transform:none;}
+  .toast.err{background:var(--hard-red);}
+
+  #configWarning{background:#fff2d6; border:1px solid #e0b050; color:#7a5510; padding:12px 16px; border-radius:9px; margin-bottom:14px; font-size:13px; display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="machine-label" id="machineLabel">Loading…</div>
+  <div class="machine-dept" id="machineDept"></div>
+</header>
+
+<main>
+  <div id="configWarning">⚠️ Supabase isn't configured in this file yet — set SUPABASE_URL / SUPABASE_ANON_KEY at the top of the script.</div>
+  <div id="app"><div class="card"><div class="empty-state">Loading machine…</div></div></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = "https://eillmgvqgaqksfsdbzez.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpbGxtZ3ZxZ2Fxa3Nmc2RiemV6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM1ODM0MjEsImV4cCI6MjA5OTE1OTQyMX0.Z_HKqT7NBYTpM_OLyEvJPlUPGUBzbbI-JA2Wa6F0Ybg";
+
+let supa = null;
+let machine = null;
+let runningBatch = null;
+let selectedJob = null;
+let candidateJobs = [];
+
+const DEPT_BALANCE_COL = {
+  Laundry:'balance_laundry', Production:'balance_production', Spraying:'balance_spraying',
+  Manual:'balance_manual', Laser:'balance_laser', Finishing:'balance_finishing'
+};
+const DEPT_ORDER = ['Laundry','Production','Spraying','Manual','Laser','Finishing','Despatch'];
+
+function escAttr(s){
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function toast(msg, isErr){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function suggestedNextDept(current){
+  const idx = DEPT_ORDER.indexOf(current);
+  return idx > -1 && idx < DEPT_ORDER.length - 1 ? DEPT_ORDER[idx+1] : 'Despatch';
+}
+
+async function init(){
+  if(!SUPABASE_URL || SUPABASE_URL === "YOUR_SUPABASE_URL" || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY === "YOUR_SUPABASE_ANON_KEY"){
+    document.getElementById('configWarning').style.display = 'block';
+    return;
+  }
+  supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const params = new URLSearchParams(window.location.search);
+  const slug = params.get('m');
+  if(!slug){
+    renderError('No machine specified. Scan a machine\'s QR code to open this page.');
+    return;
+  }
+
+  try{
+    const {data: machines, error} = await supa.from('machines').select('*').eq('qr_slug', slug).eq('active', true).limit(1);
+    if(error) throw error;
+    if(!machines || machines.length === 0){
+      renderError(`Unknown or inactive machine code "${slug}".`);
+      return;
+    }
+    machine = machines[0];
+    document.getElementById('machineLabel').textContent = machine.label;
+    document.getElementById('machineDept').textContent = machine.department;
+
+    const {data: batches, error: bErr} = await supa.from('machine_batches').select('*, wash_jobs(*)').eq('machine_id', machine.id).eq('status', 'running').limit(1);
+    if(bErr) throw bErr;
+    runningBatch = (batches && batches[0]) || null;
+
+    if(runningBatch){
+      renderRunning();
+    } else {
+      renderIdle();
+    }
+  }catch(err){
+    console.error(err);
+    renderError('Could not load this machine: ' + (err.message || err));
+  }
+}
+
+function renderError(msg){
+  document.getElementById('machineLabel').textContent = 'Machine Scan';
+  document.getElementById('machineDept').textContent = '';
+  document.getElementById('app').innerHTML = `<div class="card"><div class="empty-state"><div class="big">⚠️</div>${escAttr(msg)}</div></div>`;
+}
+
+/* ---------------- Idle: assign a job ---------------- */
+function renderIdle(){
+  document.getElementById('app').innerHTML = `
+    <div class="card">
+      <label>Find Job Card (CMT, Style #, or Order #)</label>
+      <input type="text" id="jobSearch" placeholder="Start typing…" autocomplete="off">
+      <div id="jobResults"></div>
+    </div>
+    <div class="card" id="qtyCard" style="display:none;">
+      <div id="selectedJobInfo"></div>
+      <label>Quantity for this load</label>
+      <input type="number" id="qtyInput" min="1">
+      <button type="button" class="btn btn-primary" id="startBatchBtn">Start Batch</button>
+    </div>
+  `;
+  document.getElementById('jobSearch').addEventListener('input', onJobSearch);
+  loadCandidateJobs();
+}
+
+async function loadCandidateJobs(){
+  const balCol = DEPT_BALANCE_COL[machine.department];
+  try{
+    const {data, error} = await supa.from('wash_jobs').select('*').is('deleted_at', null).gt(balCol, 0);
+    if(error) throw error;
+    candidateJobs = data || [];
+  }catch(err){
+    console.error(err);
+    toast('Could not load job cards: ' + (err.message || err), true);
+  }
+}
+
+function onJobSearch(e){
+  const q = e.target.value.trim().toLowerCase();
+  const resultsEl = document.getElementById('jobResults');
+  if(q.length < 2){ resultsEl.innerHTML = ''; return; }
+  const balCol = DEPT_BALANCE_COL[machine.department];
+  const matches = candidateJobs.filter(j=>{
+    const hay = `${j.cmt_name} ${j.style_number} ${j.order_number}`.toLowerCase();
+    return hay.includes(q);
+  }).slice(0, 15);
+  if(matches.length === 0){
+    resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">No jobs found with ${machine.department} balance matching "${escAttr(e.target.value)}".</div>`;
+    return;
+  }
+  resultsEl.innerHTML = matches.map(j=>`
+    <div class="job-result" data-id="${j.id}">
+      <div class="info"><b>${escAttr(j.style_number)}</b><span>${escAttr(j.cmt_name)} · Order ${escAttr(j.order_number)}</span></div>
+      <div class="bal">${j[balCol]} avail.</div>
+    </div>
+  `).join('');
+  resultsEl.querySelectorAll('.job-result').forEach(el=>{
+    el.addEventListener('click', ()=>selectJob(el.dataset.id));
+  });
+}
+
+function selectJob(id){
+  selectedJob = candidateJobs.find(j=>j.id === id);
+  if(!selectedJob) return;
+  document.querySelectorAll('.job-result').forEach(el=>el.classList.toggle('selected', el.dataset.id === id));
+  const balCol = DEPT_BALANCE_COL[machine.department];
+  const available = selectedJob[balCol] || 0;
+  document.getElementById('selectedJobInfo').innerHTML = `
+    <div class="job-result selected" style="cursor:default;">
+      <div class="info"><b>${escAttr(selectedJob.style_number)}</b><span>${escAttr(selectedJob.cmt_name)} · Order ${escAttr(selectedJob.order_number)}</span></div>
+      <div class="bal">${available} avail.</div>
+    </div>`;
+  const qtyInput = document.getElementById('qtyInput');
+  qtyInput.value = available;
+  qtyInput.max = available;
+  document.getElementById('qtyCard').style.display = 'block';
+  document.getElementById('qtyCard').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+document.addEventListener('click', (e)=>{
+  if(e.target && e.target.id === 'startBatchBtn') startBatch();
+});
+
+async function startBatch(){
+  if(!selectedJob){ toast('Pick a job first.', true); return; }
+  const qty = Number(document.getElementById('qtyInput').value);
+  const balCol = DEPT_BALANCE_COL[machine.department];
+  const available = selectedJob[balCol] || 0;
+  if(!qty || qty <= 0){ toast('Enter a quantity.', true); return; }
+  if(qty > available){ toast(`Only ${available} available in ${machine.department} for this job.`, true); return; }
+
+  const btn = document.getElementById('startBatchBtn');
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try{
+    const {data: inserted, error: insErr} = await supa.from('machine_batches').insert({
+      machine_id: machine.id, job_id: selectedJob.id, department: machine.department,
+      qty, status: 'running'
+    }).select();
+    if(insErr) throw insErr;
+
+    const {error: updErr} = await supa.from('wash_jobs').update({ [balCol]: available - qty }).eq('id', selectedJob.id);
+    if(updErr) throw updErr;
+
+    runningBatch = {...inserted[0], wash_jobs: selectedJob};
+    toast('Batch started.');
+    renderRunning();
+  }catch(err){
+    console.error(err);
+    toast('Could not start batch: ' + (err.message || err), true);
+    btn.disabled = false; btn.textContent = 'Start Batch';
+  }
+}
+
+/* ---------------- Running: complete or cancel ---------------- */
+function renderRunning(){
+  const job = runningBatch.wash_jobs;
+  const startedAt = new Date(runningBatch.started_at);
+  const elapsedMin = Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 60000));
+  const elapsedStr = elapsedMin < 60 ? `${elapsedMin} min` : `${Math.floor(elapsedMin/60)}h ${elapsedMin%60}m`;
+
+  const deptOptions = DEPT_ORDER.filter(d => d !== machine.department);
+  const suggested = suggestedNextDept(machine.department);
+
+  document.getElementById('app').innerHTML = `
+    <div class="card">
+      <div class="running-hero">
+        <div class="qty">${runningBatch.qty}</div>
+        <div class="job-name">${escAttr(job.style_number)} · ${escAttr(job.cmt_name)}</div>
+        <div class="job-sub">Order ${escAttr(job.order_number)} · in ${machine.department}</div>
+        <div class="elapsed">Started ${startedAt.toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} · ${elapsedStr} ago</div>
+      </div>
+    </div>
+    <div class="card">
+      <label>Move completed units to</label>
+      <select id="moveToSelect">
+        ${deptOptions.map(d=>`<option value="${d}" ${d===suggested?'selected':''}>${d}</option>`).join('')}
+      </select>
+      <button type="button" class="btn btn-complete" id="completeBatchBtn">Complete Batch</button>
+    </div>
+    <div class="card">
+      <button type="button" class="btn btn-cancel" id="cancelBatchBtn">Cancel Batch</button>
+      <div style="font-size:11.5px; color:var(--muted); text-align:center;">Reverses this load — units go back to ${machine.department}.</div>
+    </div>
+  `;
+  document.getElementById('completeBatchBtn').addEventListener('click', completeBatch);
+  document.getElementById('cancelBatchBtn').addEventListener('click', cancelBatch);
+}
+
+async function completeBatch(){
+  const moveTo = document.getElementById('moveToSelect').value;
+  const btn = document.getElementById('completeBatchBtn');
+  btn.disabled = true; btn.textContent = 'Completing…';
+  try{
+    const {error: batchErr} = await supa.from('machine_batches').update({
+      status: 'complete', completed_at: new Date().toISOString(), moved_to_department: moveTo
+    }).eq('id', runningBatch.id);
+    if(batchErr) throw batchErr;
+
+    const job = runningBatch.wash_jobs;
+    if(moveTo === 'Despatch'){
+      const updates = { units_despatched: (job.units_despatched||0) + runningBatch.qty };
+      if(!job.despatch_date) updates.despatch_date = new Date().toISOString().slice(0,10);
+      const {error: jobErr} = await supa.from('wash_jobs').update(updates).eq('id', job.id);
+      if(jobErr) throw jobErr;
+    } else {
+      const balCol = DEPT_BALANCE_COL[moveTo];
+      const {data: freshJob, error: fetchErr} = await supa.from('wash_jobs').select(balCol).eq('id', job.id).single();
+      if(fetchErr) throw fetchErr;
+      const {error: jobErr} = await supa.from('wash_jobs').update({ [balCol]: (freshJob[balCol]||0) + runningBatch.qty }).eq('id', job.id);
+      if(jobErr) throw jobErr;
+    }
+
+    toast('Batch completed.');
+    runningBatch = null;
+    selectedJob = null;
+    renderIdle();
+  }catch(err){
+    console.error(err);
+    toast('Could not complete batch: ' + (err.message || err), true);
+    btn.disabled = false; btn.textContent = 'Complete Batch';
+  }
+}
+
+async function cancelBatch(){
+  if(!confirm('Cancel this batch? The units go back to ' + machine.department + '.')) return;
+  const btn = document.getElementById('cancelBatchBtn');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  try{
+    const {error: batchErr} = await supa.from('machine_batches').update({
+      status: 'cancelled', completed_at: new Date().toISOString()
+    }).eq('id', runningBatch.id);
+    if(batchErr) throw batchErr;
+
+    const balCol = DEPT_BALANCE_COL[machine.department];
+    const job = runningBatch.wash_jobs;
+    const {data: freshJob, error: fetchErr} = await supa.from('wash_jobs').select(balCol).eq('id', job.id).single();
+    if(fetchErr) throw fetchErr;
+    const {error: jobErr} = await supa.from('wash_jobs').update({ [balCol]: (freshJob[balCol]||0) + runningBatch.qty }).eq('id', job.id);
+    if(jobErr) throw jobErr;
+
+    toast('Batch cancelled.');
+    runningBatch = null;
+    selectedJob = null;
+    renderIdle();
+  }catch(err){
+    console.error(err);
+    toast('Could not cancel batch: ' + (err.message || err), true);
+    btn.disabled = false; btn.textContent = 'Cancel Batch';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
