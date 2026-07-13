@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Machine Labels</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
@@ -58,6 +58,9 @@
   .label-card .m-label{font-family:'Oswald',sans-serif; font-weight:700; font-size:16px; color:var(--navy);}
   .label-card .m-dept{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--purple-deep); font-weight:600;}
   .label-card canvas{margin:6px 0;}
+  .qr-slot{min-height:130px; display:flex; align-items:center; justify-content:center;}
+  .qr-fallback{font-size:10.5px; color:var(--hard-red); line-height:1.5; padding:8px;}
+  .mono{font-family:'JetBrains Mono',monospace; word-break:break-all;}
   .label-card .m-slug{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);}
 
   .empty-state{text-align:center; padding:30px; color:var(--muted); font-size:13px;}
@@ -182,18 +185,40 @@ function renderPrintSheet(){
     <div class="label-card">
       <div class="m-label">${escAttr(m.label)}</div>
       <div class="m-dept">${escAttr(m.department)}</div>
-      <canvas id="qr-${escAttr(m.id)}"></canvas>
+      <div class="qr-slot" id="qr-slot-${escAttr(m.id)}"><canvas id="qr-${escAttr(m.id)}"></canvas></div>
       <div class="m-slug">${escAttr(m.qr_slug)}</div>
     </div>
   `).join('');
+
+  if(!window.QRCode){
+    showQrLibWarning();
+    machines.forEach(m=>{
+      const url = `${SCAN_BASE_URL}?m=${encodeURIComponent(m.qr_slug)}`;
+      const slot = document.getElementById('qr-slot-'+m.id);
+      if(slot) slot.innerHTML = `<div class="qr-fallback">QR library didn't load.<br>Use this link instead:<br><span class="mono">${escAttr(url)}</span></div>`;
+    });
+    return;
+  }
+
   machines.forEach(m=>{
     const url = `${SCAN_BASE_URL}?m=${encodeURIComponent(m.qr_slug)}`;
     const canvas = document.getElementById('qr-'+m.id);
-    if(canvas && window.QRCode){
-      QRCode.toCanvas(canvas, url, {width:130, margin:1}, (err)=>{ if(err) console.error(err); });
-    }
+    const slot = document.getElementById('qr-slot-'+m.id);
+    QRCode.toCanvas(canvas, url, {width:130, margin:1}, (err)=>{
+      if(err){
+        console.error(err);
+        if(slot) slot.innerHTML = `<div class="qr-fallback">Couldn't render this QR code.<br>Use this link instead:<br><span class="mono">${escAttr(url)}</span></div>`;
+      }
+    });
   });
 }
+
+function showQrLibWarning(){
+  const w = document.getElementById('configWarning');
+  w.style.display = 'block';
+  w.textContent = "⚠️ The QR code library didn't load (likely blocked by network/firewall). Labels below show the scan link as text instead — you can still type it into a browser, or try again on a different network/connection.";
+}
+
 
 document.getElementById('addMachineBtn').addEventListener('click', async ()=>{
   const label = document.getElementById('newLabel').value.trim();
