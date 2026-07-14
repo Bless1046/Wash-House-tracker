@@ -257,6 +257,17 @@
   .bar-progress-fill{position:absolute; top:6px; height:9px; border-radius:5px 0 0 5px; background:rgba(31,56,100,.55);}
 
   .charts-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px;}
+  .machine-board{display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px;}
+  .machine-tile{border-radius:9px; padding:14px; border:1.5px solid var(--line); background:var(--chambray);}
+  .machine-tile.running{background:#eef4fb; border-color:var(--denim);}
+  .machine-tile .m-name{font-family:'Oswald',sans-serif; font-weight:600; font-size:13.5px; color:var(--navy);}
+  .machine-tile .m-dept{font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-top:1px;}
+  .machine-tile .m-status{margin-top:8px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);}
+  .machine-tile.running .m-status{color:var(--denim);}
+  .machine-tile .m-job{margin-top:6px; font-size:12px; color:var(--ink);}
+  .machine-tile .m-qty{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted); margin-top:2px;}
+  .machine-tile .m-cycle{margin-top:6px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--purple-deep); background:#f0e0f4; display:inline-block; padding:2px 8px; border-radius:20px;}
+  .machine-tile .m-total{margin-top:6px; font-size:10.5px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
   .bd-list{display:flex; flex-direction:column; gap:14px;}
   .bd-item{display:flex; flex-direction:column; gap:6px;}
   .bd-item-top{display:flex; align-items:center; justify-content:space-between; gap:8px;}
@@ -327,6 +338,7 @@
   <nav class="tabbar">
     <button class="tab-link active" data-tab="jobcard">Job Card</button>
     <button class="tab-link" data-tab="dashboard">Dashboard</button>
+    <button class="tab-link" data-tab="machineboard">Machine Board</button>
   </nav>
 </header>
 
@@ -453,6 +465,52 @@
       <div class="progress-list" id="completedList"></div>
     </div>
   </section>
+
+  <!-- ============ TAB 3: MACHINE BOARD ============ -->
+  <section class="tab" id="tab-machineboard">
+    <div class="kpi-row">
+      <div class="kpi total"><div class="num" id="mbKpiRunning">0</div><div class="lbl">Running Now</div></div>
+      <div class="kpi received"><div class="num" id="mbKpiCompletedToday">0</div><div class="lbl">Completed Today</div></div>
+      <div class="kpi late"><div class="num" id="mbKpiCancelledToday">0</div><div class="lbl">Cancelled Today</div></div>
+      <div class="kpi planned"><div class="num" id="mbKpiMachines">0</div><div class="lbl">Machines Set Up</div></div>
+    </div>
+
+    <div class="dash-section card" style="padding:20px 22px;">
+      <div class="section-title-bar">Live Machine Status <span class="chip" id="machineBoardChip">0 running</span></div>
+      <div class="machine-board" id="machineBoard"><div class="empty-state">Loading…</div></div>
+    </div>
+
+    <div class="dash-section card" style="padding:20px 22px;">
+      <div class="section-title-bar">Batch History <span class="chip" id="batchHistoryChip">0</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Machine</th><th>Department</th><th>Job</th><th>Qty</th><th>Status</th>
+              <th>Started</th><th>Completed</th><th>Duration</th><th>Moved To</th>
+            </tr>
+          </thead>
+          <tbody id="batchHistoryBody">
+            <tr class="empty-row"><td colspan="9">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="dash-section card" style="padding:20px 22px;">
+      <div class="section-title-bar">Total Time by Job <span class="chip" id="jobTotalsNote">last 50 batches</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Job</th><th>Cycles</th><th>Total Duration</th></tr>
+          </thead>
+          <tbody id="jobTotalsBody">
+            <tr class="empty-row"><td colspan="3">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div class="drawer-overlay" id="jobDrawerOverlay">
@@ -521,6 +579,10 @@
           <div>
             <label>Days in Washing</label>
             <input type="number" id="days_in_washing" min="0" value="0">
+          </div>
+          <div>
+            <label>Wash Cycles Required</label>
+            <input type="number" id="wash_cycles_required" min="1" value="1">
           </div>
 
           <div>
@@ -692,7 +754,7 @@ let locallyDeletedJobs = []; // only used when Supabase isn't configured (no-DB 
 // so partial import formats (like Planned Jobs) don't leave fields undefined.
 const JOB_DEFAULTS = {
   description:'', pis_month:'', process:'', wash_metric:'Medium',
-  start_date:null, style_delivery_date:null, days_in_washing:0,
+  start_date:null, style_delivery_date:null, days_in_washing:0, wash_cycles_required:1,
   planned_units:0, sample_received:false, status:'', comments:'',
   units_received:0, units_despatched:0, complete_date:null, despatch_date:null,
   drops:[], lead_time_days:0, last_drop_date:null,
@@ -802,6 +864,7 @@ document.querySelectorAll('.tab-link').forEach(btn=>{
     btn.classList.add('active');
     document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
     if(btn.dataset.tab === 'dashboard') renderDashboard();
+    if(btn.dataset.tab === 'machineboard') renderMachineBoardTab();
   });
 });
 
@@ -880,6 +943,7 @@ function readForm(){
     process: document.getElementById('process').value.trim(),
     wash_metric: document.getElementById('wash_metric').value,
     days_in_washing: Number(document.getElementById('days_in_washing').value) || 0,
+    wash_cycles_required: Number(document.getElementById('wash_cycles_required').value) || 1,
     planned_units: Number(document.getElementById('planned_units').value) || 0,
     sample_received: document.querySelector('input[name=sample_received]:checked').value === 'yes',
     status: document.getElementById('status').value.trim(),
@@ -911,6 +975,7 @@ function fillForm(job){
   document.getElementById('process').value = job.process || '';
   document.getElementById('wash_metric').value = job.wash_metric || 'Medium';
   document.getElementById('days_in_washing').value = job.days_in_washing || 0;
+  document.getElementById('wash_cycles_required').value = job.wash_cycles_required || 1;
   document.getElementById('planned_units').value = job.planned_units || 0;
   document.querySelector(`input[name=sample_received][value=${job.sample_received ? 'yes' : 'no'}]`).checked = true;
   document.getElementById('status').value = job.status || '';
@@ -1419,6 +1484,198 @@ function renderCmtChart(scoped){
     return {label, count, bg:style.bg, text:style.text, bar:style.bar};
   });
   el.innerHTML = bdItemsHtml(entries);
+}
+
+/* ---------------- Machine Board (own tab) ---------------- */
+async function renderMachineBoardTab(){
+  await loadMachineBoard();
+  await loadBatchHistory();
+}
+
+async function loadMachineBoard(){
+  const el = document.getElementById('machineBoard');
+  if(!supa){
+    el.innerHTML = '<div class="empty-state">Machine Board needs Supabase configured.</div>';
+    document.getElementById('machineBoardChip').textContent = '';
+    return;
+  }
+  try{
+    const {data: machines, error: mErr} = await supa.from('machines').select('*').eq('active', true).order('department').order('label');
+    if(mErr) throw mErr;
+    const {data: batches, error: bErr} = await supa.from('machine_batches').select('*, wash_jobs(cmt_name, style_number, order_number, wash_cycles_required)').eq('status', 'running');
+    if(bErr) throw bErr;
+
+    // How many cycles has each running job already completed in its current department,
+    // and how much total time has it already spent across every department so far?
+    const runningJobIds = [...new Set((batches||[]).map(b=>b.job_id))];
+    const cycleCounts = {};
+    const priorDurationByJob = {};
+    if(runningJobIds.length){
+      const {data: completedBatches, error: cErr} = await supa.from('machine_batches').select('job_id, department, started_at, completed_at').eq('status','complete').in('job_id', runningJobIds);
+      if(cErr) throw cErr;
+      (completedBatches||[]).forEach(b=>{
+        const key = `${b.job_id}|${b.department}`;
+        cycleCounts[key] = (cycleCounts[key]||0) + 1;
+        const ms = new Date(b.completed_at) - new Date(b.started_at);
+        priorDurationByJob[b.job_id] = (priorDurationByJob[b.job_id]||0) + ms;
+      });
+    }
+
+    renderMachineBoard(machines || [], batches || [], cycleCounts, priorDurationByJob);
+
+    document.getElementById('mbKpiRunning').textContent = (batches||[]).length;
+    document.getElementById('mbKpiMachines').textContent = (machines||[]).length;
+
+    const todayISO = new Date().toISOString().slice(0,10);
+    const {data: todaysBatches, error: tErr} = await supa.from('machine_batches').select('status, completed_at').gte('completed_at', todayISO + 'T00:00:00');
+    if(tErr) throw tErr;
+    const completedToday = (todaysBatches||[]).filter(b=>b.status==='complete').length;
+    const cancelledToday = (todaysBatches||[]).filter(b=>b.status==='cancelled').length;
+    document.getElementById('mbKpiCompletedToday').textContent = completedToday;
+    document.getElementById('mbKpiCancelledToday').textContent = cancelledToday;
+  }catch(err){
+    console.error(err);
+    el.innerHTML = `<div class="empty-state">Could not load Machine Board — has the Machine Scanner schema been run? (${escAttr(err.message||err)})</div>`;
+    document.getElementById('machineBoardChip').textContent = '';
+  }
+}
+
+function renderMachineBoard(machines, batches, cycleCounts, priorDurationByJob){
+  const el = document.getElementById('machineBoard');
+  document.getElementById('machineBoardChip').textContent = `${batches.length} running`;
+  if(machines.length === 0){
+    el.innerHTML = '<div class="empty-state">No machines set up yet — add them in machine_labels.html.</div>';
+    return;
+  }
+  const batchByMachine = {};
+  batches.forEach(b=>{ batchByMachine[b.machine_id] = b; });
+
+  el.innerHTML = machines.map(m=>{
+    const batch = batchByMachine[m.id];
+    if(!batch){
+      return `
+        <div class="machine-tile">
+          <div class="m-name">${escAttr(m.label)}</div>
+          <div class="m-dept">${escAttr(m.department)}</div>
+          <div class="m-status">Idle</div>
+        </div>`;
+    }
+    const job = batch.wash_jobs || {};
+    const elapsedMs = Date.now() - new Date(batch.started_at).getTime();
+    const elapsedMin = Math.max(0, Math.round(elapsedMs / 60000));
+    const elapsedStr = elapsedMin < 60 ? `${elapsedMin}m` : `${Math.floor(elapsedMin/60)}h ${elapsedMin%60}m`;
+
+    const required = job.wash_cycles_required || 1;
+    const completedCycles = (cycleCounts && cycleCounts[`${batch.job_id}|${batch.department}`]) || 0;
+    const currentCycle = completedCycles + 1;
+    const cycleLine = (required > 1 || completedCycles > 0)
+      ? `<div class="m-cycle">Cycle ${currentCycle}${required > 1 ? ' of '+required : ''}</div>`
+      : '';
+
+    const totalMs = ((priorDurationByJob && priorDurationByJob[batch.job_id]) || 0) + elapsedMs;
+    const totalLine = `<div class="m-total">Total in process: ${formatDuration(totalMs)}</div>`;
+
+    return `
+      <div class="machine-tile running">
+        <div class="m-name">${escAttr(m.label)}</div>
+        <div class="m-dept">${escAttr(m.department)}</div>
+        <div class="m-status">Running · ${elapsedStr}</div>
+        <div class="m-job">${escAttr(job.style_number||'—')} · ${escAttr(job.cmt_name||'')}</div>
+        <div class="m-qty">${batch.qty} units</div>
+        ${cycleLine}
+        ${totalLine}
+      </div>`;
+  }).join('');
+}
+
+function formatDuration(ms){
+  if(ms == null || ms < 0) return '—';
+  const totalMin = Math.round(ms/60000);
+  const h = Math.floor(totalMin/60);
+  const m = totalMin%60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+async function loadBatchHistory(){
+  const tbody = document.getElementById('batchHistoryBody');
+  if(!supa){
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Needs Supabase configured.</td></tr>';
+    return;
+  }
+  try{
+    const {data, error} = await supa
+      .from('machine_batches')
+      .select('*, machines(label, department), wash_jobs(cmt_name, style_number, order_number)')
+      .order('created_at', {ascending:false})
+      .limit(50);
+    if(error) throw error;
+    renderBatchHistory(data || []);
+    renderJobTotals(data || []);
+  }catch(err){
+    console.error(err);
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="9">Could not load batch history: ${escAttr(err.message||err)}</td></tr>`;
+  }
+}
+
+function renderBatchHistory(batches){
+  const tbody = document.getElementById('batchHistoryBody');
+  document.getElementById('batchHistoryChip').textContent = batches.length;
+  if(batches.length === 0){
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">No batches recorded yet.</td></tr>';
+    return;
+  }
+  const fmt = (d)=> d ? new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+  const statusPill = (s)=>{
+    if(s === 'running') return '<span class="pill pill-medium">Running</span>';
+    if(s === 'complete') return '<span class="pill pill-easy">Complete</span>';
+    return '<span class="pill pill-hard">Cancelled</span>';
+  };
+  tbody.innerHTML = batches.map(b=>{
+    const m = b.machines || {};
+    const j = b.wash_jobs || {};
+    const duration = b.completed_at
+      ? formatDuration(new Date(b.completed_at) - new Date(b.started_at))
+      : (b.status === 'running' ? 'In progress' : '—');
+    return `
+    <tr>
+      <td>${escAttr(m.label||'—')}</td>
+      <td>${escAttr(b.department)}</td>
+      <td>${escAttr(j.style_number||'—')} · ${escAttr(j.cmt_name||'')}</td>
+      <td>${b.qty}</td>
+      <td>${statusPill(b.status)}</td>
+      <td>${fmt(b.started_at)}</td>
+      <td>${fmt(b.completed_at)}</td>
+      <td>${duration}</td>
+      <td>${escAttr(b.moved_to_department||'—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderJobTotals(batches){
+  const el = document.getElementById('jobTotalsBody');
+  if(!el) return;
+  const completed = batches.filter(b=>b.status==='complete' && b.completed_at);
+  if(completed.length === 0){
+    el.innerHTML = '<tr class="empty-row"><td colspan="4">No completed batches yet.</td></tr>';
+    return;
+  }
+  const totals = {};
+  completed.forEach(b=>{
+    const j = b.wash_jobs || {};
+    const key = b.job_id;
+    const ms = new Date(b.completed_at) - new Date(b.started_at);
+    if(!totals[key]) totals[key] = {job:j, ms:0, cycles:0};
+    totals[key].ms += ms;
+    totals[key].cycles += 1;
+  });
+  const rows = Object.values(totals).sort((a,b)=>b.ms - a.ms);
+  el.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${escAttr(r.job.style_number||'—')} · ${escAttr(r.job.cmt_name||'')}</td>
+      <td>${r.cycles}</td>
+      <td>${formatDuration(r.ms)}</td>
+    </tr>
+  `).join('');
 }
 
 /* ---------------- Import ---------------- */
