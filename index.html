@@ -611,6 +611,21 @@
             </div>
           </div>
           <div>
+            <label>Pre-Production</label>
+            <div class="radio-row">
+              <label><input type="radio" name="pre_production" value="yes"> Yes</label>
+              <label><input type="radio" name="pre_production" value="no" checked> No</label>
+            </div>
+          </div>
+
+          <div>
+            <label>Pilot</label>
+            <div class="radio-row">
+              <label><input type="radio" name="pilot" value="yes"> Yes</label>
+              <label><input type="radio" name="pilot" value="no" checked> No</label>
+            </div>
+          </div>
+          <div>
             <label>Status</label>
             <input type="text" id="status" list="statusList" placeholder="e.g. In Progress">
             <datalist id="statusList">
@@ -651,6 +666,9 @@
               <legend>Balances (units outstanding)</legend>
               <div class="balance-grid">
                 <div><label>Laundry</label><input type="number" id="balance_laundry" min="0" value="0"></div>
+                <div><label>Grinding</label><input type="number" id="balance_grinding" min="0" value="0"></div>
+                <div><label>Tint</label><input type="number" id="balance_tint" min="0" value="0"></div>
+                <div><label>Drying</label><input type="number" id="balance_drying" min="0" value="0"></div>
                 <div><label>Production</label><input type="number" id="balance_production" min="0" value="0"></div>
                 <div><label>Spraying</label><input type="number" id="balance_spraying" min="0" value="0"></div>
                 <div><label>Manual</label><input type="number" id="balance_manual" min="0" value="0"></div>
@@ -755,10 +773,11 @@ let locallyDeletedJobs = []; // only used when Supabase isn't configured (no-DB 
 const JOB_DEFAULTS = {
   description:'', pis_month:'', process:'', wash_metric:'Medium',
   start_date:null, style_delivery_date:null, days_in_washing:0, wash_cycles_required:1,
-  planned_units:0, sample_received:false, status:'', comments:'',
+  planned_units:0, sample_received:false, pre_production:false, pilot:false, status:'', comments:'',
   units_received:0, units_despatched:0, complete_date:null, despatch_date:null,
   drops:[], lead_time_days:0, last_drop_date:null,
-  balance_laundry:0, balance_production:0, balance_spraying:0,
+  balance_laundry:0, balance_grinding:0, balance_tint:0, balance_drying:0,
+  balance_production:0, balance_spraying:0,
   balance_manual:0, balance_laser:0, balance_finishing:0,
 };
 let editingId = null;
@@ -809,6 +828,9 @@ const METRIC_COLOR_VAR = {
 
 const DEPT_STYLE = {
   Laundry:      {bg:'#DCE7F2', text:'#2b4160', bar:'#3d5a80'},
+  Grinding:     {bg:'#EAE3D6', text:'#6b5a34', bar:'#a3844f'},
+  Tint:         {bg:'#F6DDE7', text:'#8a2a55', bar:'#c65e8d'},
+  Drying:       {bg:'#FBEAD1', text:'#8a5a12', bar:'#d9903a'},
   Production:   {bg:'#ECE0F0', text:'#6c2c84', bar:'#6c2c84'},
   Spraying:     {bg:'#DCEBEA', text:'#1f4d4a', bar:'#33606F'},
   Manual:       {bg:'#F5E6C8', text:'#7a5510', bar:'#B17F1A'},
@@ -946,6 +968,8 @@ function readForm(){
     wash_cycles_required: Number(document.getElementById('wash_cycles_required').value) || 1,
     planned_units: Number(document.getElementById('planned_units').value) || 0,
     sample_received: document.querySelector('input[name=sample_received]:checked').value === 'yes',
+    pre_production: document.querySelector('input[name=pre_production]:checked').value === 'yes',
+    pilot: document.querySelector('input[name=pilot]:checked').value === 'yes',
     status: document.getElementById('status').value.trim(),
     comments: document.getElementById('comments').value.trim(),
     units_received: units_received,
@@ -956,6 +980,9 @@ function readForm(){
     lead_time_days: Number(document.getElementById('lead_time_days').value) || 0,
     last_drop_date: document.getElementById('last_drop_date').value || null,
     balance_laundry: Number(document.getElementById('balance_laundry').value) || 0,
+    balance_grinding: Number(document.getElementById('balance_grinding').value) || 0,
+    balance_tint: Number(document.getElementById('balance_tint').value) || 0,
+    balance_drying: Number(document.getElementById('balance_drying').value) || 0,
     balance_production: Number(document.getElementById('balance_production').value) || 0,
     balance_spraying: Number(document.getElementById('balance_spraying').value) || 0,
     balance_manual: Number(document.getElementById('balance_manual').value) || 0,
@@ -978,6 +1005,8 @@ function fillForm(job){
   document.getElementById('wash_cycles_required').value = job.wash_cycles_required || 1;
   document.getElementById('planned_units').value = job.planned_units || 0;
   document.querySelector(`input[name=sample_received][value=${job.sample_received ? 'yes' : 'no'}]`).checked = true;
+  document.querySelector(`input[name=pre_production][value=${job.pre_production ? 'yes' : 'no'}]`).checked = true;
+  document.querySelector(`input[name=pilot][value=${job.pilot ? 'yes' : 'no'}]`).checked = true;
   document.getElementById('status').value = job.status || '';
   document.getElementById('comments').value = job.comments || '';
   document.getElementById('units_despatched').value = job.units_despatched || 0;
@@ -986,6 +1015,9 @@ function fillForm(job){
   document.getElementById('lead_time_days').value = job.lead_time_days || 0;
   document.getElementById('last_drop_date').value = job.last_drop_date || '';
   document.getElementById('balance_laundry').value = job.balance_laundry || 0;
+  document.getElementById('balance_grinding').value = job.balance_grinding || 0;
+  document.getElementById('balance_tint').value = job.balance_tint || 0;
+  document.getElementById('balance_drying').value = job.balance_drying || 0;
   document.getElementById('balance_production').value = job.balance_production || 0;
   document.getElementById('balance_spraying').value = job.balance_spraying || 0;
   document.getElementById('balance_manual').value = job.balance_manual || 0;
@@ -1223,7 +1255,7 @@ function renderHero(scoped, total, late){
   },0) / total) : 0;
   const complete = scoped.filter(j=>j.complete_date).length;
   const inProgress = total - complete;
-  const totalBalance = scoped.reduce((s,j)=> s + (j.balance_laundry||0)+(j.balance_production||0)+(j.balance_spraying||0)+(j.balance_manual||0)+(j.balance_laser||0)+(j.balance_finishing||0), 0);
+  const totalBalance = scoped.reduce((s,j)=> s + (j.balance_laundry||0)+(j.balance_grinding||0)+(j.balance_tint||0)+(j.balance_drying||0)+(j.balance_production||0)+(j.balance_spraying||0)+(j.balance_manual||0)+(j.balance_laser||0)+(j.balance_finishing||0), 0);
 
   document.getElementById('heroDate').textContent = new Date().toLocaleDateString('en-GB',{weekday:'long', day:'numeric', month:'long', year:'numeric'}).toUpperCase();
   document.getElementById('heroTitle').textContent = `${total} ${modeLabel} Job Card${total===1?'':'s'} · ${avgProgress}% Avg Feed Progress`;
@@ -1408,7 +1440,8 @@ function bdItemsHtml(entries){
 
 function renderBalanceChart(scoped){
   const fields = [
-    ['Laundry','balance_laundry'], ['Production','balance_production'], ['Spraying','balance_spraying'],
+    ['Laundry','balance_laundry'], ['Grinding','balance_grinding'], ['Tint','balance_tint'], ['Drying','balance_drying'],
+    ['Production','balance_production'], ['Spraying','balance_spraying'],
     ['Manual','balance_manual'], ['Laser','balance_laser'], ['Finishing','balance_finishing']
   ];
   const el = document.getElementById('balChart');
@@ -1833,9 +1866,11 @@ function diffFields(existing, incoming){
     ['wash_metric','Wash'], ['status','Status'], ['process','Process'],
     ['style_delivery_date','Delivery'], ['despatch_date','Despatch'], ['complete_date','Complete'],
     ['last_drop_date','Last Drop'], ['lead_time_days','Lead Time'], ['days_in_washing','Days Washing'],
-    ['balance_laundry','Bal. Laundry'], ['balance_production','Bal. Production'],
+    ['balance_laundry','Bal. Laundry'], ['balance_grinding','Bal. Grinding'], ['balance_tint','Bal. Tint'],
+    ['balance_drying','Bal. Drying'], ['balance_production','Bal. Production'],
     ['balance_spraying','Bal. Spraying'], ['balance_manual','Bal. Manual'],
     ['balance_laser','Bal. Laser'], ['balance_finishing','Bal. Finishing'],
+    ['pre_production','Pre-Production'], ['pilot','Pilot'],
   ];
   const changes = [];
   fields.forEach(([key,label])=>{
