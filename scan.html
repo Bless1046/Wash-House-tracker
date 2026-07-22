@@ -81,6 +81,7 @@
   .running-hero .job-name{font-size:15px; color:var(--ink); margin-top:2px; font-weight:600;}
   .running-hero .job-sub{font-size:12.5px; color:var(--muted); margin-top:2px;}
   .running-hero .elapsed{margin-top:10px; font-size:12px; color:var(--muted); font-family:'JetBrains Mono',monospace;}
+  .cycle-badge{display:inline-block; margin-top:8px; background:#f0e0f4; color:var(--purple-deep); font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; padding:4px 12px; border-radius:20px;}
 
   .toast{
     position:fixed; bottom:20px; left:16px; right:16px; background:var(--navy); color:#fff;
@@ -118,10 +119,11 @@ let selectedJob = null;
 let candidateJobs = [];
 
 const DEPT_BALANCE_COL = {
-  Laundry:'balance_laundry', Production:'balance_production', Spraying:'balance_spraying',
+  Laundry:'balance_laundry', Grinding:'balance_grinding', Tint:'balance_tint', Drying:'balance_drying',
+  Production:'balance_production', Spraying:'balance_spraying',
   Manual:'balance_manual', Laser:'balance_laser', Finishing:'balance_finishing'
 };
-const DEPT_ORDER = ['Laundry','Production','Spraying','Manual','Laser','Finishing','Despatch'];
+const DEPT_ORDER = ['Laundry','Grinding','Tint','Drying','Production','Spraying','Manual','Laser','Finishing','Despatch'];
 
 function escAttr(s){
   return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -291,14 +293,28 @@ async function startBatch(){
 }
 
 /* ---------------- Running: complete or cancel ---------------- */
-function renderRunning(){
+async function renderRunning(){
   const job = runningBatch.wash_jobs;
   const startedAt = new Date(runningBatch.started_at);
   const elapsedMin = Math.max(0, Math.round((Date.now() - startedAt.getTime()) / 60000));
   const elapsedStr = elapsedMin < 60 ? `${elapsedMin} min` : `${Math.floor(elapsedMin/60)}h ${elapsedMin%60}m`;
 
-  const deptOptions = DEPT_ORDER.filter(d => d !== machine.department);
-  const suggested = suggestedNextDept(machine.department);
+  let completedCycles = 0;
+  try{
+    const {count, error} = await supa.from('machine_batches')
+      .select('id', {count:'exact', head:true})
+      .eq('job_id', job.id).eq('department', machine.department).eq('status', 'complete');
+    if(!error) completedCycles = count || 0;
+  }catch(err){ console.error(err); }
+
+  const required = job.wash_cycles_required || 1;
+  const currentCycle = completedCycles + 1;
+  const needsAnotherCycle = currentCycle < required;
+
+  // Same department first if this job still needs more cycles here; otherwise the usual next step.
+  const suggested = needsAnotherCycle ? machine.department : suggestedNextDept(machine.department);
+  const deptOptions = DEPT_ORDER.map(d => d === machine.department ? `${d} (same — another cycle)` : d);
+  const deptValues = DEPT_ORDER;
 
   document.getElementById('app').innerHTML = `
     <div class="card">
@@ -306,13 +322,22 @@ function renderRunning(){
         <div class="qty">${runningBatch.qty}</div>
         <div class="job-name">${escAttr(job.style_number)} · ${escAttr(job.cmt_name)}</div>
         <div class="job-sub">Order ${escAttr(job.order_number)} · in ${machine.department}</div>
+        ${(required > 1 || completedCycles > 0) ? `<div class="cycle-badge">Cycle ${currentCycle}${required > 1 ? ' of '+required : ''}</div>` : ''}
         <div class="elapsed">Started ${startedAt.toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})} · ${elapsedStr} ago</div>
       </div>
     </div>
     <div class="card">
+      <label>Wash cycles required for this job</label>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input type="number" id="cyclesRequiredInput" min="1" value="${required}" style="margin-bottom:0;">
+        <button type="button" class="btn btn-ghost" id="saveCyclesBtn" style="width:auto; margin-bottom:0; white-space:nowrap; padding:13px 16px;">Save</button>
+      </div>
+      <div style="font-size:11px; color:var(--muted); margin-top:8px;">Change this any time — e.g. bump it up if this job needs an extra wash.</div>
+    </div>
+    <div class="card">
       <label>Move completed units to</label>
       <select id="moveToSelect">
-        ${deptOptions.map(d=>`<option value="${d}" ${d===suggested?'selected':''}>${d}</option>`).join('')}
+        ${deptValues.map((d,i)=>`<option value="${d}" ${d===suggested?'selected':''}>${deptOptions[i]}</option>`).join('')}
       </select>
       <button type="button" class="btn btn-complete" id="completeBatchBtn">Complete Batch</button>
     </div>
@@ -323,6 +348,25 @@ function renderRunning(){
   `;
   document.getElementById('completeBatchBtn').addEventListener('click', completeBatch);
   document.getElementById('cancelBatchBtn').addEventListener('click', cancelBatch);
+  document.getElementById('saveCyclesBtn').addEventListener('click', saveCyclesRequired);
+}
+
+async function saveCyclesRequired(){
+  const val = Number(document.getElementById('cyclesRequiredInput').value);
+  if(!val || val < 1){ toast('Enter a number of 1 or more.', true); return; }
+  const btn = document.getElementById('saveCyclesBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const {error} = await supa.from('wash_jobs').update({wash_cycles_required: val}).eq('id', runningBatch.wash_jobs.id);
+    if(error) throw error;
+    runningBatch.wash_jobs.wash_cycles_required = val;
+    toast('Cycles required updated.');
+    renderRunning();
+  }catch(err){
+    console.error(err);
+    toast('Could not save: ' + (err.message || err), true);
+    btn.disabled = false; btn.textContent = 'Save';
+  }
 }
 
 async function completeBatch(){
